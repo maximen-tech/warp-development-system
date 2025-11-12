@@ -24,9 +24,11 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
 - Examples
 
 ## Quick start
+- Read the Ultimate Guide: `GUIDE.md`
 - Browse modules in numbered folders
 - See `.warp/` for project AI rules and model routing
 - Try examples in `examples/`
+- Agent-Led mode: start with `/init`, then run `/next` or `/autopilot`
 
 ## Repository map
 - `.warp/` — WARP.md, agent-config.yml, mcp-servers.yml, models/

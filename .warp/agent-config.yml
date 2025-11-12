@@ -1,15 +1,24 @@
 # Agent approval and security boundaries
 
 approval:
-  default: manual
+  default: propose   # agent proposes; safe paths may auto-apply
+  auto_apply_globs:
+    - "**/*.md"
+    - "**/.github/**"
+    - "05_WORKFLOWS/github-actions/**"
+  manual_required_globs:
+    - "**/migrations/**"
+    - "**/infrastructure/**"
+    - "**/*prod*/*"
+    - "**/terraform/**"
+    - "**/kubernetes/**"
+    - "**/*secrets*/*"
+    - "**/*.sql"
   rules:
-    - path: "**/*.yml"
-      action: apply
-      require: manual
-    - path: "**/*.md"
-      action: apply
-      require: manual
     - path: "**/*.sh"
+      action: propose
+      require: manual
+    - path: "**/*.ps1"
       action: propose
       require: manual
 
