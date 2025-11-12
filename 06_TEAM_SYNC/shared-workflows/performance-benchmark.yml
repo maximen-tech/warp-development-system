@@ -1,0 +1,5 @@
+# Performance Benchmark (Shared Workflow)
+
+- Run benchmarks for target services
+- Compare to baseline and flag regressions
+- Store results for trend analysis

@@ -1,0 +1,12 @@
+name: Example Security Audit Workflow
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Security audit
+        run: bash 05_WORKFLOWS/slash-commands/audit/audit.sh

@@ -1,0 +1,5 @@
+# Compliance Check (Shared Workflow)
+
+- Lint, license scan, dependency vulnerability scan
+- Output: report artifact
+- Gate: block merge on critical findings

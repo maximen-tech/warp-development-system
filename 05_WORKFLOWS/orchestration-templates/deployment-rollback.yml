@@ -1,0 +1,16 @@
+name: Deployment-Rollback
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version or commit to rollback to"
+        required: true
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rollback
+        run: |
+          echo "Rolling back to ${{ github.event.inputs.version }}"
+          # TODO: implement rollback steps

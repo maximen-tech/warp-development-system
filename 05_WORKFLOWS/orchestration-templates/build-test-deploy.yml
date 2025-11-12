@@ -1,0 +1,17 @@
+name: Build-Test-Deploy
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+jobs:
+  build_test_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: bash 05_WORKFLOWS/slash-commands/build/build.sh
+      - name: Test
+        run: bash 05_WORKFLOWS/slash-commands/test/test.sh
+      - name: Deploy (manual gate)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: bash 05_WORKFLOWS/slash-commands/deploy/deploy.sh staging

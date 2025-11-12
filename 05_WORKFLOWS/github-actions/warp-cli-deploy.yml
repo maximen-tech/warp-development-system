@@ -1,0 +1,15 @@
+name: Warp CLI Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment"
+        required: true
+        default: "staging"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        run: bash 05_WORKFLOWS/slash-commands/deploy/deploy.sh ${{ github.event.inputs.env }}

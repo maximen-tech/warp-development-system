@@ -1,0 +1,5 @@
+# Security Scan (Shared Workflow)
+
+- SAST + DAST + IaC checks
+- Enforce minimum policy
+- Export SARIF for code scanning

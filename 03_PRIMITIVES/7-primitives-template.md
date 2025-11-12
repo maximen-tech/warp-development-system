@@ -1,0 +1,9 @@
+# The 7 Primitives Template
+
+[CONTEXTE]
+[OBJECTIF]
+[SCOPE]
+[MODÈLE]
+[VALIDATION]
+[FORMAT]
+[AUTONOMIE]

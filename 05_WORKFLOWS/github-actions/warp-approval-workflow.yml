@@ -1,0 +1,19 @@
+name: Warp Approval Workflow
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+jobs:
+  gated_job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare changes
+        run: echo "Proposing changes (review in Warp before merge)"
+      - name: Await approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          approvers: ${{ github.actor }}
+      - name: Apply after approval
+        run: echo "Approved. Applying changes."

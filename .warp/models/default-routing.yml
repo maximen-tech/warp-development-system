@@ -1,0 +1,13 @@
+# Default model routing
+planning:
+  strategy: cost_opt
+  model: deepseek-planning
+  fallback: o3-planning
+execution:
+  model: claude-execution
+  temperature: 0.2
+validation:
+  enabled: true
+  steps:
+    - lint
+    - static_check

@@ -1,0 +1,10 @@
+name: Database-Migration
+on:
+  workflow_dispatch:
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run migration (up)
+        run: bash 05_WORKFLOWS/slash-commands/migrate/migrate.sh up

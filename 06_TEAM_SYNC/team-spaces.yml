@@ -1,0 +1,19 @@
+# Team Spaces
+
+structure:
+  org: example-corp
+  spaces:
+    - name: core-engineering
+      repositories:
+        - warp-development-system
+      permissions:
+        admins: [team-leads]
+        writers: [devs]
+        readers: [qa, support]
+    - name: platform-ops
+      repositories:
+        - warp-development-system
+      permissions:
+        admins: [sre-leads]
+        writers: [sre]
+        readers: [devs]

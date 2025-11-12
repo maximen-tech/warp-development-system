@@ -1,0 +1,14 @@
+name: Example Multi-Agent Orchestration
+on:
+  workflow_dispatch:
+jobs:
+  plan_execute_validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Plan
+        run: bash 05_WORKFLOWS/slash-commands/plan/plan.sh "Refactor module"
+      - name: Execute
+        run: bash 05_WORKFLOWS/slash-commands/build/build.sh
+      - name: Validate
+        run: bash 05_WORKFLOWS/slash-commands/test/test.sh

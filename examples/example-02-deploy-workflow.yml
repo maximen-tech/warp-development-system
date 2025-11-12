@@ -1,0 +1,14 @@
+name: Example Deploy Workflow
+on:
+  workflow_dispatch:
+jobs:
+  example_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: bash 05_WORKFLOWS/slash-commands/build/build.sh
+      - name: Test
+        run: bash 05_WORKFLOWS/slash-commands/test/test.sh
+      - name: Deploy
+        run: bash 05_WORKFLOWS/slash-commands/deploy/deploy.sh dev

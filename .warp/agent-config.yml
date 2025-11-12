@@ -1,0 +1,19 @@
+# Agent approval and security boundaries
+
+approval:
+  default: manual
+  rules:
+    - path: "**/*.yml"
+      action: apply
+      require: manual
+    - path: "**/*.md"
+      action: apply
+      require: manual
+    - path: "**/*.sh"
+      action: propose
+      require: manual
+
+secrets:
+  redaction: enabled
+  allow_env_patterns:
+    - "{{*}}"

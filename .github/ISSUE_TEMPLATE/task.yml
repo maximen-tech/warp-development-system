@@ -1,0 +1,20 @@
+name: Task
+about: Structured task using 7 primitives
+labels: task
+body:
+  - type: textarea
+    id: primitives
+    attributes:
+      label: 7 Primitives
+      value: |
+        [CONTEXTE]
+        [OBJECTIF]
+        [SCOPE]
+        [MODÈLE]
+        [VALIDATION]
+        [FORMAT]
+        [AUTONOMIE]
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables

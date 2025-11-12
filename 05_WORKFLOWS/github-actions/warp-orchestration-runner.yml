@@ -1,0 +1,13 @@
+name: Warp Orchestration Runner
+on:
+  workflow_dispatch:
+jobs:
+  run_orchestration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build → Test → Deploy
+        run: |
+          bash 05_WORKFLOWS/slash-commands/build/build.sh
+          bash 05_WORKFLOWS/slash-commands/test/test.sh
+          echo "Manual approval required for deploy in this workflow"

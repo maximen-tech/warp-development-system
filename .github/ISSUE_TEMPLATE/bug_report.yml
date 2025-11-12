@@ -1,0 +1,21 @@
+name: Bug report
+about: Create a report to help us improve
+labels: bug
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Use the 7 primitives (CONTEXTE/OBJECTIF/SCOPE/MODÈLE/VALIDATION/FORMAT/AUTONOMIE)
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots

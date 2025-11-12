@@ -1,0 +1,13 @@
+{
+  "name": "Example Team Workspace",
+  "spaces": [
+    {
+      "name": "core-engineering",
+      "repos": ["warp-development-system"],
+      "notebooks": [
+        "06_TEAM_SYNC/notebooks/deployment-runbook.md",
+        "06_TEAM_SYNC/notebooks/incident-response.md"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+name: Feature-Development
+on:
+  workflow_dispatch:
+jobs:
+  plan_build_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Plan feature
+        run: bash 05_WORKFLOWS/slash-commands/plan/plan.sh "Implement feature"
+      - name: Build
+        run: bash 05_WORKFLOWS/slash-commands/build/build.sh
+      - name: Test
+        run: bash 05_WORKFLOWS/slash-commands/test/test.sh

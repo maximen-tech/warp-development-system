@@ -1,0 +1,6 @@
+# DeepSeek planning profile
+name: deepseek-planning
+provider: deepseek
+model: r1-free
+max_tokens: 8192
+cost_priority: high
