@@ -1222,6 +1222,31 @@ app.delete('/api/code-history/:projectId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Prompt Synthesis
+const promptSynthesizer = new PromptSynthesizer();
+
+app.get('/api/prompts/status', (req, res) => {
+  res.json(promptSynthesizer.getStatus());
+});
+
+app.post('/api/prompts/synthesize', async (req, res) => {
+  try {
+    const { terminalOutput, userIdea, selectedSkills, projectContext } = req.body;
+    
+    const result = await promptSynthesizer.synthesize({
+      terminalOutput,
+      userIdea,
+      selectedSkills,
+      projectContext
+    });
+    
+    res.json(result);
+  } catch (e) {
+    console.error('[prompts] Synthesis error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Auto-start watching active project
 process.on('SIGINT', async () => {
   console.log('\n[dashboard] Shutting down...');

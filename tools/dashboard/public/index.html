@@ -245,12 +245,15 @@
       }
       previewPlan();
       
-      // Initialize terminal + history panels
+      // Initialize terminal + history + prompt factory panels
       if (typeof initTerminalPanel !== 'undefined') {
         initTerminalPanel();
       }
       if (typeof initHistoryPanel !== 'undefined') {
         initHistoryPanel();
+      }
+      if (typeof initPromptFactory !== 'undefined') {
+        initPromptFactory();
       }
     </script>
   </body>
