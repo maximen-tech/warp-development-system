@@ -40,3 +40,23 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
 - Fill each module with organization-specific content
 - Wire up CI via `05_WORKFLOWS/github-actions`
 - Define slash-commands in `05_WORKFLOWS/slash-commands`
+
+## Local orchestration demos
+- Start dashboard: `cd tools/dashboard && npm install && npm run start` (http://localhost:3030)
+- Run e2e scenarios:
+  - PowerShell: `pwsh -File tools/e2e/run_all.ps1`
+  - Bash: `bash tools/e2e/run_all.sh`
+- Outputs:
+  - Live events: `runtime/events.jsonl` (dashboard streams this file)
+  - Snapshots: `runtime/scenarios/happy.jsonl`, `runtime/scenarios/escalation.jsonl`, `runtime/scenarios/edge.jsonl`
+
+## Events → UI mapping (user impact)
+| Event kind            | UI element                                   | User impact |
+|-----------------------|-----------------------------------------------|-------------|
+| start                 | header entry                                 | run begun   |
+| transition            | row with phase badge                          | state moved |
+| agent_request/response| row with agent + usage                        | model call  |
+| action_proposed       | row with command + approval badge (auto/manual) | requires attention if manual |
+| validation_summary    | row with summary bullets count                | ready to review |
+| end                   | row with green status                         | run finished |
+| error                 | red row with error text                       | investigate; retries may apply |

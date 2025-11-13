@@ -7,6 +7,10 @@ from typing import Any, Dict, List, Optional
 import os
 import json
 import shutil
+import fnmatch
+
+from .config import load_agent_config
+from .logging import log_event
 
 # Optional import of LangGraph; fall back to a simple sequential runner if unavailable
 try:  # pragma: no cover
@@ -24,11 +28,9 @@ def _runtime_dir() -> str:
 
 
 def _write_events(event: Dict[str, Any]) -> None:
-    # Append JSONL event for tools/dashboard (SSE)
+    # Back-compat: also push through shared logger
     try:
-        events_path = os.path.join(_runtime_dir(), "events.jsonl")
-        with open(events_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        log_event(kind="trace", data=event)
     except Exception:
         pass
 
@@ -51,18 +53,29 @@ from .steps.validation import validate_step  # noqa: E402
 
 
 class _SimpleRunner:  # minimal shim with invoke() to mirror LangGraph compiled graphs
-    def __init__(self):
+    def __init__(self, retries: int = 1):
         self._nodes = [plan_step, execute_step, validate_step]
+        self._retries = retries
 
     def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
         for fn in self._nodes:
-            updates = fn(state)
-            state.update(updates or {})
-            _write_events({"phase": fn.__name__, "status": state.get("status"), "goal": state.get("goal")})
+            attempt = 0
+            while True:
+                try:
+                    updates = fn(state)
+                    state.update(updates or {})
+                    log_event("transition", {"node": fn.__name__}, phase=fn.__name__, status=state.get("status"))
+                    break
+                except Exception as e:  # guard + retry
+                    attempt += 1
+                    log_event("error", {"node": fn.__name__}, phase=fn.__name__, status="error", error=str(e))
+                    if attempt > self._retries:
+                        state["status"] = "failed"
+                        return state
         return state
 
 
-def build_graph():
+def build_graph(retries: int = 1):
     """Return a compiled LangGraph if available, else a simple sequential runner.
 
     State is a plain dict to keep runtime dependency-free.
@@ -77,10 +90,12 @@ def build_graph():
         graph.add_edge("execute", "validate")
         graph.add_edge("validate", END)
         return graph.compile()
-    return _SimpleRunner()
+    return _SimpleRunner(retries=retries)
 
 
 def run_goal(goal: str, constraints: Optional[Dict[str, Any]] = None, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    cfg = load_agent_config(os.path.dirname(os.path.dirname(__file__)))
+    retries = int((constraints or {}).get("retries", 1))
     state: Dict[str, Any] = {
         "goal": goal,
         "constraints": constraints or {},
@@ -89,7 +104,17 @@ def run_goal(goal: str, constraints: Optional[Dict[str, Any]] = None, context: O
         "actions": [],
         "validation": {},
         "status": "init",
+        "config": cfg.__dict__,
+        "approvals": [],
+        "history": [],
     }
-    engine = build_graph()
-    result = engine.invoke(state)
+    log_event("start", {"goal": goal, "retries": retries})
+    engine = build_graph(retries=retries)
+    try:
+        result = engine.invoke(state)
+    except Exception as e:
+        log_event("error", {"stage": "engine"}, status="failed", error=str(e))
+        state["status"] = "failed"
+        result = state
+    log_event("end", {"status": result.get("status")})
     return result

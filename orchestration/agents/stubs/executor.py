@@ -2,8 +2,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Any
 
+"""Stub executor; see orchestration/agents/concrete for routed implementation."""
+
 @dataclass
 class ExecutorAgent:
+    """Executor agent mapping plans to concrete shell/PowerShell commands.
+
+    Contract
+    - Inputs: plan (list[str])
+    - Outputs: actions dict {posix: [...], windows: [...]} with dry_run markers
+    """
     name: str = "executor"
     model_profile: str = "claude-execution"
 

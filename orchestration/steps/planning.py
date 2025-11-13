@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing import Any, Dict, List
 import os
 import subprocess
+from ..agents.concrete.planner import Planner
+from ..logging import log_event
 
 def _git_top_dirs(root: str) -> List[str]:
     try:
@@ -18,14 +20,33 @@ def plan_step(state: Dict[str, Any]) -> Dict[str, Any]:
     root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     top_dirs = _git_top_dirs(root)
 
-    plan = [
-        f"Understand goal: {goal}",
-        "Index codebase (git ls-files) and extract relevant paths",
-        "Propose minimal actions (build/test/plan commands)",
-        "Run validation mirroring CI (lint analyzers)"
-    ]
+    # Try concrete planner via model routing; fallback to deterministic plan
+    try:
+        agent = Planner()
+        res = agent.run(goal, top_dirs)
+        steps = res.get("steps") or []
+        if steps:
+            plan = steps
+        else:
+            plan = [
+                f"Understand goal: {goal}",
+                "Index codebase (git ls-files) and extract relevant paths",
+                "Propose minimal actions (build/test/plan commands)",
+                "Run validation mirroring CI (lint analyzers)",
+            ]
+        log_event("plan_built", {"count": len(plan)}, phase="plan")
+    except Exception:
+        plan = [
+            f"Understand goal: {goal}",
+            "Index codebase (git ls-files) and extract relevant paths",
+            "Propose minimal actions (build/test/plan commands)",
+            "Run validation mirroring CI (lint analyzers)",
+        ]
     context = {
         "top_dirs": top_dirs,
         "files_hint": ["README.md", ".github/workflows/ci.yml", "WARP.md"],
     }
-    return {"plan": plan, "context": {**state.get("context", {}), **context}, "status": "planned"}
+    # Pattern 11: command history mining seed
+    history_entry = {"phase": "planning", "goal": goal, "top_dirs": top_dirs}
+    (state.setdefault("history", [])).append(history_entry)
+    return {"plan": plan, "context": {**state.get("context", {}), **context}, "status": "planned", "history": state.get("history")}
