@@ -52,6 +52,14 @@ def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
             a["approval"] = level
             log_event("action_proposed", {"cmd": a["cmd"], "approval": level, "paths": a.get("paths")}, phase="execute")
 
+    # Optional simulation: add a risky action to demonstrate manual approval gates
+    if (state.get("context") or {}).get("simulate_risky"):
+        risky = {"name": "infra-apply", "cmd": ["bash", "echo", "apply"], "paths": ["infrastructure/prod/apply.tf"], "dry_run": True}
+        level = _needs_approval(risky["paths"])
+        risky["approval"] = level
+        actions.append(risky)
+        log_event("action_proposed", {"cmd": risky["cmd"], "approval": level, "paths": risky.get("paths")}, phase="execute")
+
     proposed = {"posix": actions, "windows": actions_ps}
     # Pattern 7: Approval gate pyramid (simulation)
     approvals = []

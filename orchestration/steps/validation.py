@@ -26,6 +26,10 @@ def validate_step(state: Dict[str, Any]) -> Dict[str, Any]:
     history.append({"phase": "validation", "checks": checks, "actions": actions})
     summary = {"available": checks, "note": "Commands may be unavailable locally; CI will still run them.", "history_len": len(history)}
 
+    # Simulate error when requested to exercise retries/guards
+    if (state.get("constraints") or {}).get("simulate_error"):
+        raise RuntimeError("simulated validation error")
+
     # Summarize with concrete validator agent
     try:
         agent = Validator()
