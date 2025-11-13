@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Warp Dashboard</title>
+    <!-- Design System CSS (Phase 6) -->
+    <link rel="stylesheet" href="/css/design-system.css" />
+    <link rel="stylesheet" href="/css/layout.css" />
+    <link rel="stylesheet" href="/css/components.css" />
+    <link rel="stylesheet" href="/css/animations.css" />
+    <link rel="stylesheet" href="/css/responsive.css" />
+    <!-- Legacy Styles -->
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/dashboard-pro.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/themes/prism-tomorrow.css" />
+    <!-- xterm.js for terminal -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+    <link rel="stylesheet" href="/terminal-panel.css" />
+    <link rel="stylesheet" href="/history-panel.css" />
+    <link rel="stylesheet" href="/prompt-factory-panel.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/collab.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script src="/terminal-panel.js"></script>
+    <script src="/notifications.js"></script>
+    <script src="/collab.js"></script>
+    <script src="/context-switcher.js"></script>
+    <script src="/history-panel.js"></script>
+    <script src="/prompt-factory-panel.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-core.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-diff.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-markdown.min.js"></script>
+    <script defer src="/quickbar.js"></script>
+    <script defer src="/ux-suite.js"></script>
+  </head>
+  <body>
+    <a href="#main" class="skip-nav">Skip to main content</a>
+    <header role="banner" class="header">
+      <div class="header__brand">
+        <h1 class="header__title">Warp Dashboard</h1>
+        <div class="project-selector">
+          <label for="activeProject">Project:</label>
+          <select id="activeProject" class="project-dropdown">
+            <option value="">No project</option>
+          </select>
+        </div>
+      </div>
+      <nav class="header__nav" role="navigation" aria-label="Main navigation">
+        <a class="nav-link" href="/projects.html">🏗️ Projects</a>
+        <a class="nav-link" href="/agents.html">Agents</a>
+        <a class="nav-link" href="/prompts.html">Prompts</a>
+        <a class="nav-link" href="/library.html">📚 Library</a>
+        <a class="nav-link" href="/marketplace.html">🛒 Marketplace</a>
+        <a class="nav-link" href="/analytics.html">📈 Analytics</a>
+        <button class="nav-button" onclick="toggleTerminal()" title="Toggle Terminal (Ctrl+`)" aria-label="Toggle Terminal Panel">🖥 Terminal</button>
+      </nav>
+      <div class="header__controls" role="toolbar" aria-label="Dashboard controls">
+        <button class="control-button" id="toggle-await" aria-describedby="await-desc">Awaiting approvals</button>
+        <button class="control-button" id="toggle-errors" aria-describedby="errors-desc">Errors</button>
+        <label class="control-button file-input-label" for="snapshot">Load snapshot</label>
+        <input id="snapshot" type="file" accept=".jsonl,.log,text/plain" class="file-input" aria-describedby="snapshot-desc" />
+      </div>
+    </header>
+    
+    <main id="main" role="main" class="main-content">
+      <section class="kpi-controls" aria-label="KPI Controls">
+        <div class="control-group">
+          <label class="control-label" for="kpiWindow">Window</label>
+          <select id="kpiWindow" class="select-input"><option value="15m" selected>Last 15m</option><option value="1h">Last 1h</option><option value="24h">Last 24h</option></select>
+          <label class="control-label" for="kpiRun">Run</label>
+          <select id="kpiRun" class="select-input"><option value="">All runs</option></select>
+          <a id="exportKpiJson" class="button secondary" href="#" aria-describedby="export-json-desc">Export KPIs (JSON)</a>
+          <a id="exportKpiCsv" class="button secondary" href="#" aria-describedby="export-csv-desc">Export KPIs (CSV)</a>
+        </div>
+      </section>
+      
+      <section class="kpi-metrics section" aria-label="Key Performance Indicators">
+        <div class="grid kpi-grid" id="kpi" role="group" aria-label="KPI Metrics"></div>
+      </section>
+      
+      <section class="overview-metrics" aria-label="System Overview">
+        <div class="overview-grid" id="overview" role="group" aria-label="System Status"></div>
+      </section>
+      
+      <section class="action-controls" aria-label="Dashboard Actions">
+        <div class="action-group">
+          <button class="button secondary" id="themeToggle" aria-describedby="theme-desc">Toggle theme</button>
+          <button class="button secondary" id="toggleStrict" aria-describedby="strict-desc">Strict approvals</button>
+          <button class="button primary" onclick="runScenario('happy')" aria-describedby="happy-desc">Run happy</button>
+          <button class="button primary" onclick="runScenario('escalation')" aria-describedby="escalation-desc">Run escalation</button>
+          <button class="button primary" onclick="runScenario('edge')" aria-describedby="edge-desc">Run edge</button>
+          <button class="button success" onclick="approveNow()" aria-describedby="approve-desc">Simulate approve</button>
+          <a class="button secondary" href="/runs.html" aria-describedby="runs-desc">Runs</a>
+        </div>
+      </section>
+      <div class="dashboard-layout">
+        <section class="timeline-section" aria-label="Event Timeline">
+          <article class="card timeline-card">
+            <header class="card__header">
+              <h2 class="card__title">Timeline</h2>
+              <input id="filter" class="filter-input" placeholder="Filter by kind/phase/agent/status/message" aria-label="Filter timeline events"/>
+            </header>
+            <div id="timeline" class="timeline-content" role="log" aria-live="polite" aria-label="System events timeline"></div>
+          </article>
+        </section>
+        
+        <aside class="sidebar-panels" aria-label="Dashboard Panels">
+          <section class="approvals-section">
+            <article class="card approvals-card">
+              <header class="card__header">
+                <h2 class="card__title">Approvals queue</h2>
+                <button class="button small success" onclick="approveNow()" aria-describedby="approve-all-desc">Approve all</button>
+              </header>
+              <div id="approvals" class="approvals-content" role="list" aria-label="Pending approvals"></div>
+            </article>
+          </section>
+          
+          <section class="artifacts-section">
+            <article class="card artifacts-card">
+              <header class="card__header">
+                <h2 class="card__title">Artifacts</h2>
+                <button class="button small secondary" id="refreshArtifacts" aria-describedby="refresh-desc">Refresh</button>
+              </header>
+              <div id="artifacts" class="artifacts-content" role="list" aria-label="System artifacts">
+                <div class="empty-state">No artifacts yet</div>
+              </div>
+            </article>
+          </section>
+          
+          <section class="analytics-section">
+            <article class="card analytics-card">
+              <header class="card__header">
+                <h2 class="card__title">Analytics</h2>
+              </header>
+              <div class="analytics-content">
+                <canvas id="sparkline" width="300" height="60" aria-label="Event frequency sparkline"></canvas>
+                <canvas id="heatmap" width="300" height="120" class="heatmap-canvas" aria-label="Agent activity heatmap"></canvas>
+              </div>
+            </article>
+          </section>
+          
+          <section class="terminal-section">
+            <article class="card terminal-card">
+              <header class="card__header">
+                <h2 class="card__title">Terminal live</h2>
+                <div class="button-group">
+                  <button class="button small secondary" id="termClear" aria-describedby="term-clear-desc">Clear</button>
+                  <button class="button small secondary" id="termFavSave" aria-describedby="term-save-desc">Save fav</button>
+                </div>
+              </header>
+              <div class="terminal-controls">
+                <input id="termInput" class="terminal-input" placeholder="Enter shell command" aria-label="Terminal command input"/>
+                <button class="button small primary" id="termRun" aria-describedby="term-run-desc">Run</button>
+                <select id="termFavs" class="favorites-select" aria-label="Favorite commands"><option value="">Favorites</option></select>
+              </div>
+              <pre id="termOut" class="terminal-output" role="log" aria-live="polite" aria-label="Terminal output"></pre>
+            </article>
+          </section>
+          
+          <section class="console-section">
+            <article class="card console-card">
+              <header class="card__header">
+                <h2 class="card__title">Console</h2>
+                <div class="button-group">
+                  <button class="button small secondary" id="pauseConsole" aria-describedby="pause-desc">Pause</button>
+                  <button class="button small secondary" id="clearConsole" aria-describedby="clear-desc">Clear</button>
+                </div>
+              </header>
+              <pre id="consoleOut" class="console-output" role="log" aria-live="polite" aria-label="System console output"></pre>
+            </article>
+          </section>
+        </aside>
+      </div>
+    </main>
+    
+    <!-- Hidden accessibility descriptions -->
+    <div class="sr-only">
+      <div id="await-desc">Show events awaiting approval</div>
+      <div id="errors-desc">Show events with errors</div>
+      <div id="snapshot-desc">Load event snapshot from file</div>
+      <div id="export-json-desc">Download KPI metrics as JSON file</div>
+      <div id="export-csv-desc">Download KPI metrics as CSV file</div>
+      <div id="theme-desc">Switch between light and dark theme</div>
+      <div id="strict-desc">Toggle strict approval mode</div>
+      <div id="happy-desc">Run happy path test scenario</div>
+      <div id="escalation-desc">Run escalation test scenario</div>
+      <div id="edge-desc">Run edge case test scenario</div>
+      <div id="approve-desc">Simulate approval for pending requests</div>
+      <div id="runs-desc">View detailed run history and logs</div>
+      <div id="approve-all-desc">Approve all pending requests in queue</div>
+      <div id="refresh-desc">Refresh artifacts list from server</div>
+      <div id="term-clear-desc">Clear terminal output</div>
+      <div id="term-save-desc">Save current command to favorites</div>
+      <div id="term-run-desc">Execute terminal command</div>
+      <div id="pause-desc">Pause console output streaming</div>
+      <div id="clear-desc">Clear console output</div>
+    </div>
+    
+    <script type="module">
+      import { initDashboard, runScenario, approveNow, showToast } from '/app.js';
+      window.runScenario = runScenario; window.approveNow = approveNow; window.showToast = showToast;
+      initDashboard();
+      // Toast on scenario runs
+      const originalRunScenario = runScenario;
+      window.runScenario = async (name) => {
+        showToast(`Running scenario: ${name}...`, 'info', 3000);
+        try{ await originalRunScenario(name); showToast(`Scenario ${name} completed!`, 'success', 3000); }catch{ showToast(`Scenario ${name} failed`, 'error', 5000); }
+      };
+      const originalApprove = approveNow;
+      window.approveNow = async () => {
+        try{ await originalApprove(); showToast('Approval granted!', 'success', 2000); }catch{ showToast('Approval failed', 'error', 4000); }
+      };
+      // drag & drop layout persist
+      const wrap = document.querySelector('.wrap');
+      function restoreLayout(){
+        try{ const order = JSON.parse(localStorage.getItem('layout:v1')||'[]'); const cards = Array.from(document.querySelectorAll('.card')); const map = {}; cards.forEach(c=>{ map[c.dataset.id] = c; }); order.forEach(id=>{ if(map[id]) wrap.appendChild(map[id]); }); }catch{}
+      }
+      function enableDrag(){
+        for(const c of document.querySelectorAll('.card')){ c.draggable = true; c.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', c.dataset.id || (c.dataset.id = Math.random().toString(36).slice(2))); }); }
+        wrap.addEventListener('dragover', e=>{ e.preventDefault(); });
+        wrap.addEventListener('drop', e=>{ e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); const el = document.querySelector(`.card[data-id="${id}"]`); if(!el) return; const target = e.target.closest('.card'); if(target && target!==el){ wrap.insertBefore(el, target); const order = Array.from(document.querySelectorAll('.card')).map(x=>x.dataset.id); localStorage.setItem('layout:v1', JSON.stringify(order)); }
+        });
+      }
+      restoreLayout(); enableDrag();
+      // theme init + artifacts markdown rendering
+      (async ()=>{ const r = await fetch('/api/theme'); const t = (await r.json()).theme; document.documentElement.classList.toggle('light', t==='light'); })();
+      document.getElementById('themeToggle').onclick = async ()=>{
+        const isLight = !document.documentElement.classList.contains('light');
+        document.documentElement.classList.toggle('light', isLight);
+        await fetch('/api/theme',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ theme: isLight ? 'light' : 'dark' })});
+        showToast(`Theme: ${isLight ? 'Light' : 'Dark'}`, 'success', 2000);
+      };
+      // approval mode init
+      (async ()=>{ try{ const r = await fetch('/api/approval-mode'); const m = (await r.json()).mode; const on = (m||'strict')==='strict'; document.getElementById('toggleStrict').classList.toggle('active', on);}catch{}})();
+      document.getElementById('toggleStrict').onclick = async ()=>{ const on = !document.getElementById('toggleStrict').classList.contains('active'); document.getElementById('toggleStrict').classList.toggle('active', on); await fetch('/api/approval-mode',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mode: on ? 'strict' : 'permissive' })}); showToast(`Approval mode: ${on ? 'Strict' : 'Permissive'}`, 'info', 2500); };
+
+      // markdown preview (plan.md)
+      async function previewPlan(){
+        try {
+          const data = await (await fetch('/api/artifact/plan')).json();
+          const md = data.content||'';
+          if(md){
+            const container = document.createElement('div');
+            container.className='card';
+            container.innerHTML = `<div class="row" style="justify-content:space-between;"><span>plan.md preview</span></div><div id="planPreview" class="small"></div>`;
+            document.querySelector('.wrap').appendChild(container);
+            const marked = (await import('https://cdn.jsdelivr.net/npm/marked/+esm')).marked;
+            document.getElementById('planPreview').innerHTML = marked.parse(md);
+          }
+        } catch {}
+      }
+      previewPlan();
+      
+      // Initialize terminal + history + prompt factory panels
+      if (typeof initTerminalPanel !== 'undefined') {
+        initTerminalPanel();
+      }
+      if (typeof initHistoryPanel !== 'undefined') {
+        initHistoryPanel();
+      }
+      if (typeof initPromptFactory !== 'undefined') {
+        initPromptFactory();
+      }
+    </script>
+  </body>
+</html>

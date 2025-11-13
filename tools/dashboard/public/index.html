@@ -1,15 +1,17 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Warp Dashboard</title>
-    <!-- Design System CSS (Phase 6) -->
-    <link rel="stylesheet" href="/css/design-system.css" />
-    <link rel="stylesheet" href="/css/layout.css" />
-    <link rel="stylesheet" href="/css/components.css" />
-    <link rel="stylesheet" href="/css/animations.css" />
-    <link rel="stylesheet" href="/css/responsive.css" />
+    <!-- Design System CSS (Phase 6 + 7) -->
+    <link rel="stylesheet" href="/css/design-system.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/animations.css">
+    <link rel="stylesheet" href="/css/responsive.css">
+    <link rel="stylesheet" href="/css/layout-v3.css">
+    <link rel="stylesheet" href="/css/dark-mode-enhanced.css">
     <!-- Legacy Styles -->
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/dashboard-pro.css" />
@@ -36,147 +38,303 @@
     <script defer src="/quickbar.js"></script>
     <script defer src="/ux-suite.js"></script>
   </head>
-  <body>
+  <body class="v3-layout">
     <a href="#main" class="skip-nav">Skip to main content</a>
-    <header role="banner" class="header">
-      <div class="header__brand">
-        <h1 class="header__title">Warp Dashboard</h1>
-        <div class="project-selector">
-          <label for="activeProject">Project:</label>
-          <select id="activeProject" class="project-dropdown">
-            <option value="">No project</option>
-          </select>
+    
+    <!-- TIER 1: Top Navigation (v3 structure, v1 links preserved) -->
+    <header role="banner" class="v3-header">
+      <div class="v3-header__container">
+        <div class="v3-header__left">
+          <a href="/" class="v3-logo" aria-label="Warp Dashboard Home">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="16" cy="16" r="16" fill="url(#gradient)"/>
+              <path d="M16 8L20 16L16 24L12 16L16 8Z" fill="white"/>
+              <defs>
+                <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
+                  <stop offset="0%" stop-color="#3B82F6"/>
+                  <stop offset="100%" stop-color="#06B6D4"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </a>
+          
+          <div class="project-selector" style="margin-left: 16px;">
+            <label for="activeProject">Project:</label>
+            <select id="activeProject" class="project-dropdown">
+              <option value="">No project</option>
+            </select>
+          </div>
+          
+          <nav class="v3-nav-primary" role="navigation" aria-label="Main navigation">
+            <a href="/" class="v3-nav-item v3-nav-item--active" aria-current="page">
+              <span class="v3-nav-icon">🎯</span>
+              <span class="v3-nav-text">Dashboard</span>
+            </a>
+            <a href="/agents.html" class="v3-nav-item">
+              <span class="v3-nav-icon">🤖</span>
+              <span class="v3-nav-text">Agents</span>
+            </a>
+            <a href="/projects.html" class="v3-nav-item">
+              <span class="v3-nav-icon">🏗️</span>
+              <span class="v3-nav-text">Projects</span>
+            </a>
+            <a href="/marketplace.html" class="v3-nav-item">
+              <span class="v3-nav-icon">🛒</span>
+              <span class="v3-nav-text">Marketplace</span>
+            </a>
+            
+            <div class="v3-nav-dropdown">
+              <button class="v3-nav-item v3-nav-item--dropdown" aria-expanded="false" aria-haspopup="true">
+                <span class="v3-nav-icon">⋯</span>
+                <span class="v3-nav-text">More</span>
+              </button>
+              <div class="v3-dropdown-menu" role="menu">
+                <a href="/prompts.html" class="v3-dropdown-item" role="menuitem">Prompts</a>
+                <a href="/library.html" class="v3-dropdown-item" role="menuitem">📚 Library</a>
+                <a href="/analytics.html" class="v3-dropdown-item" role="menuitem">📈 Analytics</a>
+                <a href="/runs.html" class="v3-dropdown-item" role="menuitem">Runs</a>
+                <div class="v3-dropdown-divider"></div>
+                <button class="v3-dropdown-item" onclick="toggleTerminal()" role="menuitem">🖥 Terminal</button>
+              </div>
+            </div>
+          </nav>
         </div>
-      </div>
-      <nav class="header__nav" role="navigation" aria-label="Main navigation">
-        <a class="nav-link" href="/projects.html">🏗️ Projects</a>
-        <a class="nav-link" href="/agents.html">Agents</a>
-        <a class="nav-link" href="/prompts.html">Prompts</a>
-        <a class="nav-link" href="/library.html">📚 Library</a>
-        <a class="nav-link" href="/marketplace.html">🛒 Marketplace</a>
-        <a class="nav-link" href="/analytics.html">📈 Analytics</a>
-        <button class="nav-button" onclick="toggleTerminal()" title="Toggle Terminal (Ctrl+`)" aria-label="Toggle Terminal Panel">🖥 Terminal</button>
-      </nav>
-      <div class="header__controls" role="toolbar" aria-label="Dashboard controls">
-        <button class="control-button" id="toggle-await" aria-describedby="await-desc">Awaiting approvals</button>
-        <button class="control-button" id="toggle-errors" aria-describedby="errors-desc">Errors</button>
-        <label class="control-button file-input-label" for="snapshot">Load snapshot</label>
-        <input id="snapshot" type="file" accept=".jsonl,.log,text/plain" class="file-input" aria-describedby="snapshot-desc" />
+        
+        <div class="v3-header__right">
+          <!-- Legacy controls (v1 preserved) -->
+          <button class="control-button" id="toggle-await" aria-describedby="await-desc">Awaiting approvals</button>
+          <button class="control-button" id="toggle-errors" aria-describedby="errors-desc">Errors</button>
+          <label class="control-button file-input-label" for="snapshot">Load snapshot</label>
+          <input id="snapshot" type="file" accept=".jsonl,.log,text/plain" class="file-input" aria-describedby="snapshot-desc" />
+          
+          <div class="v3-profile-dropdown">
+            <button class="v3-profile-btn" aria-expanded="false" aria-haspopup="true">
+              <span class="v3-avatar">
+                <span class="v3-avatar-text">U</span>
+              </span>
+            </button>
+            <div class="v3-dropdown-menu v3-dropdown-menu--right" role="menu">
+              <div class="v3-dropdown-header">
+                <div class="v3-dropdown-user-name">User</div>
+                <div class="v3-dropdown-user-email">user@example.com</div>
+              </div>
+              <div class="v3-dropdown-divider"></div>
+              <a href="/approvals.html" class="v3-dropdown-item" role="menuitem">⚙️ Settings</a>
+              <button class="v3-dropdown-item" id="themeToggle" role="menuitem">🌓 Toggle Theme</button>
+              <div class="v3-dropdown-divider"></div>
+              <button class="v3-dropdown-item v3-dropdown-item--danger" role="menuitem">🚪 Logout</button>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
-    
-    <main id="main" role="main" class="main-content">
-      <section class="kpi-controls" aria-label="KPI Controls">
-        <div class="control-group">
-          <label class="control-label" for="kpiWindow">Window</label>
-          <select id="kpiWindow" class="select-input"><option value="15m" selected>Last 15m</option><option value="1h">Last 1h</option><option value="24h">Last 24h</option></select>
-          <label class="control-label" for="kpiRun">Run</label>
-          <select id="kpiRun" class="select-input"><option value="">All runs</option></select>
-          <a id="exportKpiJson" class="button secondary" href="#" aria-describedby="export-json-desc">Export KPIs (JSON)</a>
-          <a id="exportKpiCsv" class="button secondary" href="#" aria-describedby="export-csv-desc">Export KPIs (CSV)</a>
-        </div>
-      </section>
-      
-      <section class="kpi-metrics section" aria-label="Key Performance Indicators">
-        <div class="grid kpi-grid" id="kpi" role="group" aria-label="KPI Metrics"></div>
-      </section>
-      
-      <section class="overview-metrics" aria-label="System Overview">
-        <div class="overview-grid" id="overview" role="group" aria-label="System Status"></div>
-      </section>
-      
-      <section class="action-controls" aria-label="Dashboard Actions">
-        <div class="action-group">
-          <button class="button secondary" id="themeToggle" aria-describedby="theme-desc">Toggle theme</button>
-          <button class="button secondary" id="toggleStrict" aria-describedby="strict-desc">Strict approvals</button>
-          <button class="button primary" onclick="runScenario('happy')" aria-describedby="happy-desc">Run happy</button>
-          <button class="button primary" onclick="runScenario('escalation')" aria-describedby="escalation-desc">Run escalation</button>
-          <button class="button primary" onclick="runScenario('edge')" aria-describedby="edge-desc">Run edge</button>
-          <button class="button success" onclick="approveNow()" aria-describedby="approve-desc">Simulate approve</button>
-          <a class="button secondary" href="/runs.html" aria-describedby="runs-desc">Runs</a>
-        </div>
-      </section>
-      <div class="dashboard-layout">
-        <section class="timeline-section" aria-label="Event Timeline">
-          <article class="card timeline-card">
-            <header class="card__header">
-              <h2 class="card__title">Timeline</h2>
-              <input id="filter" class="filter-input" placeholder="Filter by kind/phase/agent/status/message" aria-label="Filter timeline events"/>
-            </header>
-            <div id="timeline" class="timeline-content" role="log" aria-live="polite" aria-label="System events timeline"></div>
-          </article>
+
+    <!-- TIER 2: Hero KPI Cards (v3 structure, v1 data integration) -->
+    <main id="main" role="main" class="v3-main">
+      <div class="v3-container">
+        <!-- KPI Controls (v1 preserved) -->
+        <section class="kpi-controls" aria-label="KPI Controls" style="margin-bottom: 24px;">
+          <div class="control-group">
+            <label class="control-label" for="kpiWindow">Window</label>
+            <select id="kpiWindow" class="select-input"><option value="15m" selected>Last 15m</option><option value="1h">Last 1h</option><option value="24h">Last 24h</option></select>
+            <label class="control-label" for="kpiRun">Run</label>
+            <select id="kpiRun" class="select-input"><option value="">All runs</option></select>
+            <a id="exportKpiJson" class="button secondary" href="#" aria-describedby="export-json-desc">Export KPIs (JSON)</a>
+            <a id="exportKpiCsv" class="button secondary" href="#" aria-describedby="export-csv-desc">Export KPIs (CSV)</a>
+          </div>
         </section>
         
-        <aside class="sidebar-panels" aria-label="Dashboard Panels">
-          <section class="approvals-section">
-            <article class="card approvals-card">
-              <header class="card__header">
-                <h2 class="card__title">Approvals queue</h2>
-                <button class="button small success" onclick="approveNow()" aria-describedby="approve-all-desc">Approve all</button>
-              </header>
-              <div id="approvals" class="approvals-content" role="list" aria-label="Pending approvals"></div>
-            </article>
-          </section>
+        <section class="v3-hero-section" aria-label="Key Performance Indicators">
+          <!-- Original KPI grid (v1 data source) -->
+          <div class="kpi-metrics section" style="display: none;">
+            <div class="grid kpi-grid" id="kpi" role="group" aria-label="KPI Metrics"></div>
+          </div>
           
-          <section class="artifacts-section">
-            <article class="card artifacts-card">
-              <header class="card__header">
-                <h2 class="card__title">Artifacts</h2>
-                <button class="button small secondary" id="refreshArtifacts" aria-describedby="refresh-desc">Refresh</button>
-              </header>
-              <div id="artifacts" class="artifacts-content" role="list" aria-label="System artifacts">
-                <div class="empty-state">No artifacts yet</div>
+          <!-- Overview metrics (v1 data source) -->
+          <div class="overview-metrics" style="display: none;">
+            <div class="overview-grid" id="overview" role="group" aria-label="System Status"></div>
+          </div>
+          
+          <!-- V3 Hero Grid (populated by v1 data via JavaScript) -->
+          <div class="v3-hero-grid">
+            <article class="v3-hero-card v3-hero-card--primary" data-kpi="total-events">
+              <div class="v3-hero-card__icon">📊</div>
+              <div class="v3-hero-card__content">
+                <div class="v3-hero-card__label">Total Events</div>
+                <div class="v3-hero-card__value" id="heroTotalEvents">0</div>
+                <div class="v3-hero-card__trend v3-hero-card__trend--positive">
+                  <span class="v3-trend-icon">↑</span>
+                  <span class="v3-trend-text" id="heroTotalTrend">--</span>
+                </div>
               </div>
             </article>
-          </section>
-          
-          <section class="analytics-section">
-            <article class="card analytics-card">
-              <header class="card__header">
-                <h2 class="card__title">Analytics</h2>
-              </header>
-              <div class="analytics-content">
-                <canvas id="sparkline" width="300" height="60" aria-label="Event frequency sparkline"></canvas>
-                <canvas id="heatmap" width="300" height="120" class="heatmap-canvas" aria-label="Agent activity heatmap"></canvas>
+
+            <article class="v3-hero-card v3-hero-card--success" data-kpi="success-rate">
+              <div class="v3-hero-card__icon">✅</div>
+              <div class="v3-hero-card__content">
+                <div class="v3-hero-card__label">Success Rate</div>
+                <div class="v3-hero-card__value" id="heroSuccessRate">0%</div>
+                <div class="v3-hero-card__breakdown" id="heroSuccessBreakdown">0 passed / 0 failed</div>
               </div>
             </article>
-          </section>
-          
-          <section class="terminal-section">
-            <article class="card terminal-card">
-              <header class="card__header">
-                <h2 class="card__title">Terminal live</h2>
-                <div class="button-group">
-                  <button class="button small secondary" id="termClear" aria-describedby="term-clear-desc">Clear</button>
-                  <button class="button small secondary" id="termFavSave" aria-describedby="term-save-desc">Save fav</button>
+
+            <article class="v3-hero-card v3-hero-card--danger" data-kpi="errors" id="heroErrorCard">
+              <div class="v3-hero-card__icon">⚠️</div>
+              <div class="v3-hero-card__content">
+                <div class="v3-hero-card__label">Critical Errors</div>
+                <div class="v3-hero-card__value" id="heroErrors">0</div>
+                <div class="v3-hero-card__status" id="heroErrorStatus">No errors</div>
+              </div>
+              <button class="v3-hero-card__action btn btn--ghost" id="heroViewErrors" style="display: none;">
+                View Details
+              </button>
+            </article>
+
+            <article class="v3-hero-card v3-hero-card--warning" data-kpi="approvals">
+              <div class="v3-hero-card__icon">✋</div>
+              <div class="v3-hero-card__content">
+                <div class="v3-hero-card__label">Pending Approvals</div>
+                <div class="v3-hero-card__value" id="heroApprovals">0</div>
+                <div class="v3-hero-card__preview" id="heroApprovalPreview">No pending approvals</div>
+              </div>
+              <button class="btn btn--primary" id="heroReviewApprovals" onclick="approveNow()">
+                Review Now
+              </button>
+            </article>
+          </div>
+        </section>
+
+        <!-- Action controls (v1 preserved) -->
+        <section class="action-controls" aria-label="Dashboard Actions" style="margin: 32px 0;">
+          <div class="action-group">
+            <button class="button secondary" id="themeToggleBtn" aria-describedby="theme-desc">Toggle theme</button>
+            <button class="button secondary" id="toggleStrict" aria-describedby="strict-desc">Strict approvals</button>
+            <button class="button primary" onclick="runScenario('happy')" aria-describedby="happy-desc">Run happy</button>
+            <button class="button primary" onclick="runScenario('escalation')" aria-describedby="escalation-desc">Run escalation</button>
+            <button class="button primary" onclick="runScenario('edge')" aria-describedby="edge-desc">Run edge</button>
+            <button class="button success" onclick="approveNow()" aria-describedby="approve-desc">Simulate approve</button>
+            <a class="button secondary" href="/runs.html" aria-describedby="runs-desc">Runs</a>
+          </div>
+        </section>
+
+        <!-- TIER 3: Main Content (2-column layout with v1 content) -->
+        <div class="v3-content-grid">
+          <!-- LEFT COLUMN: Timeline (v1 content in v3 structure) -->
+          <section class="v3-timeline-section" aria-label="Event Timeline">
+            <article class="card v3-timeline-card">
+              <header class="card__header v3-timeline-header">
+                <h2 class="card__title">
+                  <span class="v3-section-icon">📝</span>
+                  Timeline
+                </h2>
+                <div class="v3-timeline-controls">
+                  <input id="filter" class="input v3-search-input filter-input" placeholder="Filter by kind/phase/agent/status/message" aria-label="Filter timeline events"/>
                 </div>
               </header>
-              <div class="terminal-controls">
-                <input id="termInput" class="terminal-input" placeholder="Enter shell command" aria-label="Terminal command input"/>
-                <button class="button small primary" id="termRun" aria-describedby="term-run-desc">Run</button>
-                <select id="termFavs" class="favorites-select" aria-label="Favorite commands"><option value="">Favorites</option></select>
-              </div>
-              <pre id="termOut" class="terminal-output" role="log" aria-live="polite" aria-label="Terminal output"></pre>
+              
+              <div id="timeline" class="timeline-content v3-timeline-content" role="log" aria-live="polite" aria-label="System events timeline"></div>
             </article>
           </section>
-          
-          <section class="console-section">
-            <article class="card console-card">
-              <header class="card__header">
-                <h2 class="card__title">Console</h2>
-                <div class="button-group">
-                  <button class="button small secondary" id="pauseConsole" aria-describedby="pause-desc">Pause</button>
-                  <button class="button small secondary" id="clearConsole" aria-describedby="clear-desc">Clear</button>
+
+          <!-- RIGHT COLUMN: Approvals + Artifacts (v1 content in v3 structure) -->
+          <aside class="v3-sidebar-section sidebar-panels" aria-label="Dashboard Panels">
+            <!-- Approvals Queue (v1 content) -->
+            <section class="v3-approvals-widget approvals-section">
+              <article class="card v3-approvals-card approvals-card">
+                <header class="card__header">
+                  <h2 class="card__title">
+                    <span class="v3-section-icon">✋</span>
+                    Approvals queue
+                  </h2>
+                  <button class="button small success" onclick="approveNow()" aria-describedby="approve-all-desc">Approve all</button>
+                </header>
+                <div id="approvals" class="approvals-content v3-approvals-list" role="list" aria-label="Pending approvals"></div>
+              </article>
+            </section>
+
+            <!-- Artifacts (v1 content) -->
+            <section class="v3-artifacts-widget artifacts-section">
+              <article class="card v3-artifacts-card artifacts-card">
+                <header class="card__header">
+                  <h2 class="card__title">
+                    <span class="v3-section-icon">📁</span>
+                    Artifacts
+                  </h2>
+                  <button class="button small secondary" id="refreshArtifacts" aria-describedby="refresh-desc">Refresh</button>
+                </header>
+                <div id="artifacts" class="artifacts-content v3-artifacts-list" role="list" aria-label="System artifacts">
+                  <div class="empty-state">No artifacts yet</div>
                 </div>
-              </header>
-              <pre id="consoleOut" class="console-output" role="log" aria-live="polite" aria-label="System console output"></pre>
-            </article>
-          </section>
-        </aside>
+              </article>
+            </section>
+
+            <!-- Analytics (v1 content) -->
+            <section class="analytics-section">
+              <article class="card analytics-card">
+                <header class="card__header">
+                  <h2 class="card__title">
+                    <span class="v3-section-icon">📊</span>
+                    Analytics
+                  </h2>
+                </header>
+                <div class="analytics-content">
+                  <canvas id="sparkline" width="300" height="60" aria-label="Event frequency sparkline"></canvas>
+                  <canvas id="heatmap" width="300" height="120" class="heatmap-canvas" aria-label="Agent activity heatmap"></canvas>
+                </div>
+              </article>
+            </section>
+
+            <!-- Terminal live (v1 content) -->
+            <section class="terminal-section">
+              <article class="card terminal-card">
+                <header class="card__header">
+                  <h2 class="card__title">Terminal live</h2>
+                  <div class="button-group">
+                    <button class="button small secondary" id="termClear" aria-describedby="term-clear-desc">Clear</button>
+                    <button class="button small secondary" id="termFavSave" aria-describedby="term-save-desc">Save fav</button>
+                  </div>
+                </header>
+                <div class="terminal-controls">
+                  <input id="termInput" class="terminal-input" placeholder="Enter shell command" aria-label="Terminal command input"/>
+                  <button class="button small primary" id="termRun" aria-describedby="term-run-desc">Run</button>
+                  <select id="termFavs" class="favorites-select" aria-label="Favorite commands"><option value="">Favorites</option></select>
+                </div>
+                <pre id="termOut" class="terminal-output" role="log" aria-live="polite" aria-label="Terminal output"></pre>
+              </article>
+            </section>
+
+            <!-- Console (v1 content) -->
+            <section class="console-section">
+              <article class="card console-card">
+                <header class="card__header">
+                  <h2 class="card__title">Console</h2>
+                  <div class="button-group">
+                    <button class="button small secondary" id="pauseConsole" aria-describedby="pause-desc">Pause</button>
+                    <button class="button small secondary" id="clearConsole" aria-describedby="clear-desc">Clear</button>
+                  </div>
+                </header>
+                <pre id="consoleOut" class="console-output" role="log" aria-live="polite" aria-label="System console output"></pre>
+              </article>
+            </section>
+          </aside>
+        </div>
       </div>
     </main>
-    
-    <!-- Hidden accessibility descriptions -->
+
+    <!-- TIER 4: Floating Footer Panel (v3) -->
+    <div class="v3-footer-panel" id="footerPanel">
+      <button class="v3-footer-btn" id="helpBtn" aria-label="Help" title="Help & Onboarding">
+        <span class="v3-footer-icon">❓</span>
+      </button>
+      <button class="v3-footer-btn" id="feedbackBtn" aria-label="Send Feedback" title="Send Feedback">
+        <span class="v3-footer-icon">💬</span>
+      </button>
+      <button class="v3-footer-btn" id="terminalToggle" aria-label="Toggle Terminal" title="Toggle Terminal (Ctrl+`)">
+        <span class="v3-footer-icon">🖥</span>
+      </button>
+    </div>
+
+    <!-- Hidden accessibility descriptions (v1 preserved) -->
     <div class="sr-only">
       <div id="await-desc">Show events awaiting approval</div>
       <div id="errors-desc">Show events with errors</div>
@@ -198,63 +356,180 @@
       <div id="pause-desc">Pause console output streaming</div>
       <div id="clear-desc">Clear console output</div>
     </div>
-    
+
+    <!-- JavaScript (v1 logic preserved + v3 enhancements) -->
     <script type="module">
       import { initDashboard, runScenario, approveNow, showToast } from '/app.js';
-      window.runScenario = runScenario; window.approveNow = approveNow; window.showToast = showToast;
+      window.runScenario = runScenario;
+      window.approveNow = approveNow;
+      window.showToast = showToast;
+
+      // Initialize dashboard (v1)
       initDashboard();
-      // Toast on scenario runs
+
+      // V3 Enhancements (dropdowns, theme)
+      const v3 = {
+        initDropdowns() {
+          document.querySelectorAll('[aria-haspopup="true"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const expanded = btn.getAttribute('aria-expanded') === 'true';
+              btn.setAttribute('aria-expanded', !expanded);
+              btn.closest('.v3-nav-dropdown, .v3-profile-dropdown')?.classList.toggle('active');
+            });
+          });
+
+          document.addEventListener('click', () => {
+            document.querySelectorAll('[aria-expanded="true"]').forEach(btn => {
+              btn.setAttribute('aria-expanded', 'false');
+              btn.closest('.v3-nav-dropdown, .v3-profile-dropdown')?.classList.remove('active');
+            });
+          });
+        },
+
+        initTerminal() {
+          document.getElementById('terminalToggle')?.addEventListener('click', () => {
+            if (typeof toggleTerminal === 'function') {
+              toggleTerminal();
+            }
+          });
+        },
+
+        init() {
+          this.initDropdowns();
+          this.initTerminal();
+        }
+      };
+
+      v3.init();
+
+      // Toast on scenario runs (v1 preserved)
       const originalRunScenario = runScenario;
       window.runScenario = async (name) => {
         showToast(`Running scenario: ${name}...`, 'info', 3000);
-        try{ await originalRunScenario(name); showToast(`Scenario ${name} completed!`, 'success', 3000); }catch{ showToast(`Scenario ${name} failed`, 'error', 5000); }
+        try {
+          await originalRunScenario(name);
+          showToast(`Scenario ${name} completed!`, 'success', 3000);
+        } catch {
+          showToast(`Scenario ${name} failed`, 'error', 5000);
+        }
       };
+
       const originalApprove = approveNow;
       window.approveNow = async () => {
-        try{ await originalApprove(); showToast('Approval granted!', 'success', 2000); }catch{ showToast('Approval failed', 'error', 4000); }
+        try {
+          await originalApprove();
+          showToast('Approval granted!', 'success', 2000);
+        } catch {
+          showToast('Approval failed', 'error', 4000);
+        }
       };
-      // drag & drop layout persist
-      const wrap = document.querySelector('.wrap');
-      function restoreLayout(){
-        try{ const order = JSON.parse(localStorage.getItem('layout:v1')||'[]'); const cards = Array.from(document.querySelectorAll('.card')); const map = {}; cards.forEach(c=>{ map[c.dataset.id] = c; }); order.forEach(id=>{ if(map[id]) wrap.appendChild(map[id]); }); }catch{}
+
+      // Drag & drop layout persist (v1 preserved)
+      const wrap = document.querySelector('.wrap') || document.querySelector('.v3-container');
+      function restoreLayout() {
+        try {
+          const order = JSON.parse(localStorage.getItem('layout:v1') || '[]');
+          const cards = Array.from(document.querySelectorAll('.card'));
+          const map = {};
+          cards.forEach(c => { map[c.dataset.id] = c; });
+          order.forEach(id => { if (map[id]) wrap?.appendChild(map[id]); });
+        } catch {}
       }
-      function enableDrag(){
-        for(const c of document.querySelectorAll('.card')){ c.draggable = true; c.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', c.dataset.id || (c.dataset.id = Math.random().toString(36).slice(2))); }); }
-        wrap.addEventListener('dragover', e=>{ e.preventDefault(); });
-        wrap.addEventListener('drop', e=>{ e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); const el = document.querySelector(`.card[data-id="${id}"]`); if(!el) return; const target = e.target.closest('.card'); if(target && target!==el){ wrap.insertBefore(el, target); const order = Array.from(document.querySelectorAll('.card')).map(x=>x.dataset.id); localStorage.setItem('layout:v1', JSON.stringify(order)); }
-        });
+
+      function enableDrag() {
+        for (const c of document.querySelectorAll('.card')) {
+          c.draggable = true;
+          c.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', c.dataset.id || (c.dataset.id = Math.random().toString(36).slice(2)));
+          });
+        }
+        if (wrap) {
+          wrap.addEventListener('dragover', e => { e.preventDefault(); });
+          wrap.addEventListener('drop', e => {
+            e.preventDefault();
+            const id = e.dataTransfer.getData('text/plain');
+            const el = document.querySelector(`.card[data-id="${id}"]`);
+            if (!el) return;
+            const target = e.target.closest('.card');
+            if (target && target !== el) {
+              wrap.insertBefore(el, target);
+              const order = Array.from(document.querySelectorAll('.card')).map(x => x.dataset.id);
+              localStorage.setItem('layout:v1', JSON.stringify(order));
+            }
+          });
+        }
       }
-      restoreLayout(); enableDrag();
-      // theme init + artifacts markdown rendering
-      (async ()=>{ const r = await fetch('/api/theme'); const t = (await r.json()).theme; document.documentElement.classList.toggle('light', t==='light'); })();
-      document.getElementById('themeToggle').onclick = async ()=>{
+
+      restoreLayout();
+      enableDrag();
+
+      // Theme init (v1 preserved)
+      (async () => {
+        try {
+          const r = await fetch('/api/theme');
+          const t = (await r.json()).theme;
+          document.documentElement.classList.toggle('light', t === 'light');
+        } catch {}
+      })();
+
+      document.getElementById('themeToggle').onclick = async () => {
         const isLight = !document.documentElement.classList.contains('light');
         document.documentElement.classList.toggle('light', isLight);
-        await fetch('/api/theme',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ theme: isLight ? 'light' : 'dark' })});
+        await fetch('/api/theme', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ theme: isLight ? 'light' : 'dark' })
+        });
         showToast(`Theme: ${isLight ? 'Light' : 'Dark'}`, 'success', 2000);
       };
-      // approval mode init
-      (async ()=>{ try{ const r = await fetch('/api/approval-mode'); const m = (await r.json()).mode; const on = (m||'strict')==='strict'; document.getElementById('toggleStrict').classList.toggle('active', on);}catch{}})();
-      document.getElementById('toggleStrict').onclick = async ()=>{ const on = !document.getElementById('toggleStrict').classList.contains('active'); document.getElementById('toggleStrict').classList.toggle('active', on); await fetch('/api/approval-mode',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mode: on ? 'strict' : 'permissive' })}); showToast(`Approval mode: ${on ? 'Strict' : 'Permissive'}`, 'info', 2500); };
 
-      // markdown preview (plan.md)
-      async function previewPlan(){
+      // Also bind themeToggleBtn (in action controls)
+      const themeBtn = document.getElementById('themeToggleBtn');
+      if (themeBtn) {
+        themeBtn.onclick = document.getElementById('themeToggle').onclick;
+      }
+
+      // Approval mode init (v1 preserved)
+      (async () => {
+        try {
+          const r = await fetch('/api/approval-mode');
+          const m = (await r.json()).mode;
+          const on = (m || 'strict') === 'strict';
+          document.getElementById('toggleStrict').classList.toggle('active', on);
+        } catch {}
+      })();
+
+      document.getElementById('toggleStrict').onclick = async () => {
+        const on = !document.getElementById('toggleStrict').classList.contains('active');
+        document.getElementById('toggleStrict').classList.toggle('active', on);
+        await fetch('/api/approval-mode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: on ? 'strict' : 'permissive' })
+        });
+        showToast(`Approval mode: ${on ? 'Strict' : 'Permissive'}`, 'info', 2500);
+      };
+
+      // Markdown preview (plan.md) (v1 preserved)
+      async function previewPlan() {
         try {
           const data = await (await fetch('/api/artifact/plan')).json();
-          const md = data.content||'';
-          if(md){
+          const md = data.content || '';
+          if (md) {
             const container = document.createElement('div');
-            container.className='card';
+            container.className = 'card';
             container.innerHTML = `<div class="row" style="justify-content:space-between;"><span>plan.md preview</span></div><div id="planPreview" class="small"></div>`;
-            document.querySelector('.wrap').appendChild(container);
+            const parent = document.querySelector('.wrap') || document.querySelector('.v3-container');
+            if (parent) parent.appendChild(container);
             const marked = (await import('https://cdn.jsdelivr.net/npm/marked/+esm')).marked;
             document.getElementById('planPreview').innerHTML = marked.parse(md);
           }
         } catch {}
       }
       previewPlan();
-      
-      // Initialize terminal + history + prompt factory panels
+
+      // Initialize terminal + history + prompt factory panels (v1 preserved)
       if (typeof initTerminalPanel !== 'undefined') {
         initTerminalPanel();
       }
@@ -264,6 +539,51 @@
       if (typeof initPromptFactory !== 'undefined') {
         initPromptFactory();
       }
+
+      // V3 Hero KPI sync (bridge v1 data → v3 hero cards)
+      function syncHeroKPIs() {
+        // Find v1 KPI data
+        const kpiGrid = document.getElementById('kpi');
+        if (kpiGrid) {
+          const kpiCards = kpiGrid.querySelectorAll('.metric');
+          kpiCards.forEach((card) => {
+            const label = card.querySelector('.metric-label')?.textContent;
+            const value = card.querySelector('.metric-value')?.textContent;
+            
+            // Map to hero cards
+            if (label?.toLowerCase().includes('event')) {
+              document.getElementById('heroTotalEvents').textContent = value || '0';
+            }
+            if (label?.toLowerCase().includes('error')) {
+              const errorVal = parseInt(value) || 0;
+              document.getElementById('heroErrors').textContent = errorVal;
+              const errorStatus = document.getElementById('heroErrorStatus');
+              if (errorStatus) {
+                errorStatus.textContent = errorVal > 0 ? `${errorVal} errors detected` : 'No errors';
+              }
+            }
+            if (label?.toLowerCase().includes('approval')) {
+              document.getElementById('heroApprovals').textContent = value || '0';
+            }
+          });
+        }
+
+        // Sync approvals badge
+        const approvalsDiv = document.getElementById('approvals');
+        if (approvalsDiv) {
+          const approvalCount = approvalsDiv.children.length || 0;
+          document.getElementById('heroApprovals').textContent = approvalCount;
+          const preview = document.getElementById('heroApprovalPreview');
+          if (preview) {
+            preview.textContent = 
+              approvalCount > 0 ? `${approvalCount} pending approval${approvalCount > 1 ? 's' : ''}` : 'No pending approvals';
+          }
+        }
+      }
+
+      // Sync every 2 seconds
+      setInterval(syncHeroKPIs, 2000);
+      syncHeroKPIs(); // Initial sync
     </script>
   </body>
 </html>
