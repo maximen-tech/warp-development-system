@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Warp Runs</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <a class="pill" href="/">← Back</a>
+      <strong>Runs</strong>
+    </header>
+    <div class="wrap">
+      <div class="grid" style="grid-template-columns: 1fr 2fr;">
+        <div class="card">
+          <div class="row" style="justify-content:space-between;">
+            <span>Run segments</span>
+            <button id="refresh" class="pill">Refresh</button>
+          </div>
+          <div id="runs"></div>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between;">
+            <span>Events</span>
+            <a id="download" class="pill" href="#">Download</a>
+          </div>
+          <pre id="events" class="small" style="white-space:pre-wrap"></pre>
+        </div>
+      </div>
+    </div>
+    <script>
+      const runsEl = document.getElementById('runs');
+      const eventsEl = document.getElementById('events');
+      const downloadEl = document.getElementById('download');
+      async function load(){
+        const meta = await (await fetch('/api/runs/segments')).json();
+        runsEl.innerHTML='';
+        for(const r of (meta.runs||[])){
+          const row = document.createElement('div');
+          row.className='row';
+          row.style.justifyContent='space-between';
+          row.innerHTML = `<span class="small">Run #${r.idx} · ${r.count} ev · ${r.errors} err · ${r.approvals} approvals</span><button class=\"pill\">Open</button>`;
+          row.querySelector('button').onclick = async ()=>{
+            const text = await (await fetch(`/api/runs/export/${r.idx}`)).text();
+            eventsEl.textContent = text;
+            downloadEl.href = `/api/runs/export/${r.idx}`;
+          };
+          runsEl.prepend(row);
+        }
+      }
+      document.getElementById('refresh').onclick = load;
+      load();
+    </script>
+  </body>
+</html>

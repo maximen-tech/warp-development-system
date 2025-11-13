@@ -27,7 +27,8 @@
       <div>
         <div class="controls">
           <button class="pill" id="refresh">Refresh</button>
-          <button class="pill" id="save">Save</button>
+          <button class="pill" id="validate">Validate</button>
+          <button class="pill" id="save" disabled>Save</button>
         </div>
         <div class="controls">
           <span>agents.yml</span>
@@ -37,6 +38,13 @@
           <span>skills.yml</span>
         </div>
         <textarea id="skills"></textarea>
+        <div class="card" style="margin-top:8px;">
+          <div class="row" style="justify-content:space-between;">
+            <span>Diff preview</span>
+            <button class="pill" id="showDiff">Show diff</button>
+          </div>
+          <pre id="diff" style="white-space:pre-wrap" class="small"></pre>
+        </div>
       </div>
       <div>
         <div class="controls">
@@ -67,6 +75,20 @@
       const stream = document.getElementById('stream');
       const agentFilter = document.getElementById('agentFilter');
       const phaseFilter = document.getElementById('phaseFilter');
+      const validateBtn = document.getElementById('validate');
+      const showDiffBtn = document.getElementById('showDiff');
+      const diffPre = document.getElementById('diff');
+      let baseline = { agents: '', skills: '' };
+
+      function computeDiff(a,b){
+        const al=a.split('\n'), bl=b.split('\n');
+        const max=Math.max(al.length, bl.length); let out=[];
+        for(let i=0;i<max;i++){
+          const L=(al[i]??''), R=(bl[i]??'');
+          if(L===R) out.push('  '+R); else { if(R!=='') out.push('+ '+R); if(L!=='') out.push('- '+L); }
+        }
+        return out.join('\n');
+      }
 
       async function load() {
         statusEl.textContent = 'Loading...';
@@ -74,16 +96,30 @@
         const data = await r.json();
         agentsEl.value = data.agents || '';
         skillsEl.value = data.skills || '';
+        baseline = { agents: agentsEl.value, skills: skillsEl.value };
         statusEl.textContent = '';
+      }
+      async function validate() {
+        statusEl.textContent = 'Validating...';
+        try {
+          const r = await fetch('/api/agents/validate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: agentsEl.value, skills: skillsEl.value })});
+          const res = await r.json();
+          if(res.ok){ statusEl.textContent = 'Valid ✓'; saveBtn.disabled = false; }
+          else { statusEl.textContent = 'Invalid'; diffPre.textContent = (res.errors||[]).map(e=>`${e.file}: ${e.error}`).join('\n'); saveBtn.disabled = true; }
+        } catch(e) { statusEl.textContent = 'Validation error'; saveBtn.disabled = true; }
+        setTimeout(()=> statusEl.textContent = '', 2000);
       }
       async function save() {
         statusEl.textContent = 'Saving...';
         const r = await fetch('/api/agents', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agents: agentsEl.value, skills: skillsEl.value }) });
         const ok = (await r.json()).ok;
+        if(ok) baseline = { agents: agentsEl.value, skills: skillsEl.value };
         statusEl.textContent = ok ? 'Saved' : 'Error';
         setTimeout(()=> statusEl.textContent = '', 1500);
       }
       refreshBtn.onclick = load;
+      validateBtn.onclick = validate;
+      showDiffBtn.onclick = ()=>{ diffPre.textContent = computeDiff(baseline.agents+'\n---\n'+baseline.skills, agentsEl.value+'\n---\n'+skillsEl.value); };
       saveBtn.onclick = save;
       load();
 

@@ -1,5 +1,5 @@
 // Dashboard logic for index.html
-const state = { events: [], counters: { total:0, errors:0, approvals:0 }, last: {} };
+const state = { events: [], counters: { total:0, errors:0, approvals:0 }, last: {}, approvals: [] };
 
 function badge(cls, text){ return `<span class="badge ${cls}">${text}</span>` }
 function clsFor(ev){ if(ev.status==='error') return 'err'; if(ev.status==='awaiting_approval') return 'warn'; if(ev.status==='validated'||ev.kind==='end') return 'ok'; return 'info'; }
@@ -24,19 +24,46 @@ function renderTimeline(ev){
   list.prepend(div);
 }
 
+function renderApprovals(){
+  const el = document.getElementById('approvals');
+  el.innerHTML='';
+  for(const ap of state.approvals.slice(-20)){
+    const row = document.createElement('div');
+    row.className='row';
+    row.style.justifyContent='space-between';
+    row.innerHTML = `<span class="small">${ap.phase||''} · ${ap.agent||''}</span><button class="pill">Approve</button>`;
+    row.querySelector('button').onclick = async ()=>{
+      await approveNow(); // simple global approve event
+    };
+    el.prepend(row);
+  }
+}
+
 function applyCounters(ev){
   state.counters.total++;
   if(ev.status==='error') state.counters.errors++;
-  if(ev.status==='awaiting_approval') state.counters.approvals++;
+  if(ev.status==='awaiting_approval'){ state.counters.approvals++; state.approvals.push(ev); renderApprovals(); }
   if(ev.phase) state.last.phase = ev.phase;
+}
+
+async function loadArtifacts(){
+  try {
+    const list = document.getElementById('artifacts');
+    const meta = await (await fetch('/api/artifacts')).json();
+    const items = meta.files||[];
+    if(!items.length){ list.innerHTML = '<div class="small">No artifacts yet</div>'; return; }
+    list.innerHTML = items.map(f=>`<div class="row" style="justify-content:space-between;"><span>${f.name}</span><span class="small">${(f.size||0)} bytes</span><a class="pill" href="/api/artifact/download/${f.name}">Download</a></div>`).join('');
+  } catch {}
 }
 
 export function initDashboard(){
   updateOverview();
+  loadArtifacts();
   const source = new EventSource('/events');
   source.onmessage = (e)=>{
     try{ const ev = JSON.parse(e.data); state.events.push(ev); applyCounters(ev); updateOverview(); renderTimeline(ev);}catch{}
   };
+  document.getElementById('refreshArtifacts')?.addEventListener('click', loadArtifacts);
   source.onerror = ()=>{
     const list = document.getElementById('timeline');
     const div = document.createElement('div');
