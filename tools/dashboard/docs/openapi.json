@@ -1,0 +1,510 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Warp Dashboard API",
+    "version": "1.0.0",
+    "description": "Complete API specification for Warp Development System Dashboard - AI Agents, Projects, Approvals, Analytics, and Marketplace",
+    "contact": {
+      "name": "Warp Development Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3030",
+      "description": "Local development server"
+    },
+    {
+      "url": "https://dashboard.warp.dev",
+      "description": "Production server"
+    }
+  ],
+  "tags": [
+    { "name": "Agents", "description": "AI Agent management and testing" },
+    { "name": "Skills", "description": "Skill library management" },
+    { "name": "Projects", "description": "Project platform operations" },
+    { "name": "Approvals", "description": "Approval workflow and audit trail" },
+    { "name": "Analytics", "description": "Real-time analytics and insights" },
+    { "name": "Marketplace", "description": "Agent and skill marketplace" },
+    { "name": "Prompts", "description": "Prompt library and synthesis" },
+    { "name": "Events", "description": "Server-Sent Events streams" }
+  ],
+  "paths": {
+    "/api/agents/list": {
+      "get": {
+        "tags": ["Agents"],
+        "summary": "List all agents and skills",
+        "parameters": [
+          {
+            "name": "projectPath",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Optional project path for per-project agents"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agents": { "type": "array", "items": { "$ref": "#/components/schemas/Agent" } },
+                    "skills": { "type": "array", "items": { "$ref": "#/components/schemas/Skill" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/save": {
+      "post": {
+        "tags": ["Agents"],
+        "summary": "Save agents and skills configuration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agents": { "type": "array", "items": { "$ref": "#/components/schemas/Agent" } },
+                  "skills": { "type": "array", "items": { "$ref": "#/components/schemas/Skill" } },
+                  "projectPath": { "type": "string" },
+                  "reason": { "type": "string" },
+                  "validateOnly": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/api/agents/test": {
+      "post": {
+        "tags": ["Agents"],
+        "summary": "Test an agent with sample input",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["agent"],
+                "properties": {
+                  "agent": { "type": "string" },
+                  "prompt": { "type": "string" },
+                  "projectPath": { "type": "string" },
+                  "input": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test execution result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "logs": { "type": "array", "items": { "type": "string" } },
+                    "output": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "List all projects with filtering",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "stack", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["active", "archived", "error"] } },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["name", "optimization", "accessed"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "projects": { "type": "array", "items": { "$ref": "#/components/schemas/Project" } },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/create": {
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Create a new project from template",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "template"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 2, "pattern": "^[a-zA-Z0-9_-]+$" },
+                  "template": { "type": "string", "enum": ["nextjs", "express", "python", "blank"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "project": { "$ref": "#/components/schemas/Project" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approvals/queue": {
+      "get": {
+        "tags": ["Approvals"],
+        "summary": "Get approval queue",
+        "responses": {
+          "200": {
+            "description": "Approval queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "approvals": { "type": "array", "items": { "$ref": "#/components/schemas/Approval" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approvals/create": {
+      "post": {
+        "tags": ["Approvals"],
+        "summary": "Create approval request",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "description", "type", "requester"],
+                "properties": {
+                  "title": { "type": "string", "minLength": 3, "maxLength": 200 },
+                  "description": { "type": "string", "minLength": 5, "maxLength": 2000 },
+                  "type": { "type": "string", "enum": ["deployment", "config-change", "agent-update", "access-request", "budget-increase", "skill-install", "project-delete"] },
+                  "requester": { "type": "string", "minLength": 2, "maxLength": 100 },
+                  "metadata": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approval created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "approval": { "$ref": "#/components/schemas/Approval" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approvals/{id}/approve": {
+      "post": {
+        "tags": ["Approvals"],
+        "summary": "Approve a request",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "comment": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Approved" }
+        }
+      }
+    },
+    "/api/approvals/{id}/reject": {
+      "post": {
+        "tags": ["Approvals"],
+        "summary": "Reject a request",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                  "reason": { "type": "string", "minLength": 3 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Rejected" }
+        }
+      }
+    },
+    "/api/approvals/stream": {
+      "get": {
+        "tags": ["Events"],
+        "summary": "SSE stream for real-time approval updates",
+        "responses": {
+          "200": {
+            "description": "Event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/kpi": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get analytics KPIs",
+        "parameters": [
+          { "name": "window", "in": "query", "schema": { "type": "string", "default": "24h" } },
+          { "name": "projectId", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analytics data",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AnalyticsKPI" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/agents": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get agent performance metrics",
+        "parameters": [
+          { "name": "projectId", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agents": { "type": "array", "items": { "$ref": "#/components/schemas/AgentMetric" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/marketplace/items": {
+      "get": {
+        "tags": ["Marketplace"],
+        "summary": "List marketplace items",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["agent", "skill"] } },
+          { "name": "tag", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marketplace items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": { "type": "array", "items": { "$ref": "#/components/schemas/MarketplaceItem" } },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/marketplace/install": {
+      "post": {
+        "tags": ["Marketplace"],
+        "summary": "Install marketplace item",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "projectId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Installed" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Agent": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string" },
+          "model": { "type": "string" },
+          "skills": { "type": "array", "items": { "type": "string" } },
+          "context_manager": { "type": "string" },
+          "temperature": { "type": "number" }
+        }
+      },
+      "Skill": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "parameters": { "type": "array", "items": { "type": "object" } },
+          "output_schema": { "type": "object" }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "archived", "error"] },
+          "tech_stack": { "type": "array", "items": { "type": "string" } },
+          "created_at": { "type": "string", "format": "date-time" },
+          "last_accessed": { "type": "string", "format": "date-time" },
+          "optimization_level": { "type": "integer" }
+        }
+      },
+      "Approval": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "type": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+          "requester": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "approvedBy": { "type": "string", "nullable": true },
+          "approvedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "comment": { "type": "string", "nullable": true },
+          "metadata": { "type": "object" }
+        }
+      },
+      "AnalyticsKPI": {
+        "type": "object",
+        "properties": {
+          "totalRuns": { "type": "integer" },
+          "successRate": { "type": "number" },
+          "avgLatency": { "type": "integer" },
+          "totalCost": { "type": "number" },
+          "activeAgents": { "type": "integer" },
+          "errorRate": { "type": "number" },
+          "trends": { "type": "object" },
+          "agentUsage": { "type": "object" },
+          "costByModel": { "type": "object" }
+        }
+      },
+      "AgentMetric": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "runs": { "type": "integer" },
+          "successRate": { "type": "number" },
+          "avgLatency": { "type": "integer" },
+          "errors": { "type": "integer" },
+          "cost": { "type": "string" },
+          "health": { "type": "string", "enum": ["healthy", "degraded", "down"] }
+        }
+      },
+      "MarketplaceItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "type": { "type": "string", "enum": ["agent", "skill"] },
+          "author": { "type": "string" },
+          "version": { "type": "string" },
+          "rating": { "type": "number" },
+          "downloads": { "type": "integer" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "dependencies": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

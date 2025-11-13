@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Approvals Workflow - Warp Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/approvals.css" />
+  </head>
+  <body>
+    <header>
+      <a class="pill" href="/">← Dashboard</a>
+      <strong>Approvals Workflow</strong>
+      <span id="userRole" class="pill" style="margin-left: auto;">Role: Admin</span>
+      <button class="pill" onclick="refreshQueue()">🔄 Refresh</button>
+    </header>
+    
+    <div class="wrap">
+      <!-- Queue Filters & Summary -->
+      <div class="card">
+        <div class="row" style="justify-content: space-between; align-items: center;">
+          <div class="row" style="gap: 8px;">
+            <button class="pill" onclick="filterQueue('pending')" data-filter="pending">Pending</button>
+            <button class="pill" onclick="filterQueue('approved')" data-filter="approved">Approved</button>
+            <button class="pill" onclick="filterQueue('rejected')" data-filter="rejected">Rejected</button>
+            <button class="pill" onclick="filterQueue('all')" data-filter="all">All</button>
+          </div>
+          <div class="row" style="gap: 12px;">
+            <span class="badge">⏳ <span id="pendingCount">0</span> Pending</span>
+            <span class="badge success">✓ <span id="approvedCount">0</span> Approved</span>
+            <span class="badge error">✗ <span id="rejectedCount">0</span> Rejected</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Approval Queue -->
+      <div id="queueContainer"></div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <div class="empty-icon">✅</div>
+        <div class="empty-text">No approvals pending</div>
+        <div class="empty-subtext">All requests have been processed</div>
+      </div>
+
+      <!-- Audit Trail -->
+      <div class="card">
+        <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3>📋 Audit Trail</h3>
+          <button class="pill" onclick="exportAuditLog()">📄 Export Log</button>
+        </div>
+        <div id="auditContainer" class="audit-trail"></div>
+      </div>
+    </div>
+
+    <!-- Approval Modal -->
+    <div id="approveModal" class="modal">
+      <div class="modal-content">
+        <h3>Approve Request</h3>
+        <p id="approveText"></p>
+        <textarea id="approveComment" placeholder="Add optional comment..." rows="3" style="width: 100%; margin-top: 8px;"></textarea>
+        <div class="row" style="gap: 8px; margin-top: 1rem;">
+          <button class="pill success" onclick="confirmApprove()">✓ Approve</button>
+          <button class="pill" onclick="closeModal('approveModal')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reject Modal -->
+    <div id="rejectModal" class="modal">
+      <div class="modal-content">
+        <h3>Reject Request</h3>
+        <p id="rejectText"></p>
+        <textarea id="rejectReason" placeholder="Reason for rejection (required)..." rows="3" style="width: 100%; margin-top: 8px;" required></textarea>
+        <div class="row" style="gap: 8px; margin-top: 1rem;">
+          <button class="pill error" onclick="confirmReject()">✗ Reject</button>
+          <button class="pill" onclick="closeModal('rejectModal')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div id="detailsModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <h3>Request Details</h3>
+        <div id="detailsContent"></div>
+        <button class="pill" onclick="closeModal('detailsModal')" style="margin-top: 1rem;">Close</button>
+      </div>
+    </div>
+
+    <script src="/approvals.js"></script>
+  </body>
+</html>
