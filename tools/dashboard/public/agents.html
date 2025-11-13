@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Warp Agents</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #0b0f14; color: #e6edf3; }
+      header { padding: 12px 16px; background: #151b23; border-bottom: 1px solid #263040; display:flex; gap:12px; align-items:center; }
+      .wrap { padding: 16px; display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+      textarea { width:100%; height: 60vh; background:#0b0f14; color:#e6edf3; border:1px solid #263040; border-radius:8px; padding:8px; }
+      .pill { padding:6px 10px; border:1px solid #263040; border-radius:999px; background:#0b0f14; color:#e6edf3; cursor:pointer; text-decoration:none; }
+      .event { padding:8px 12px; background:#11161d; border:1px solid #263040; border-radius:8px; margin-bottom:8px; }
+      .ts { color:#9fb3c8; font-size:12px; }
+      .ok { color:#27d980; } .err { color:#ff6b6b; } .info { color:#6ab7ff; } .warn { color:#ffc857; }
+      .controls { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+      select, input { background:#0b0f14; color:#e6edf3; border:1px solid #263040; border-radius:6px; padding:6px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="pill" href="/">← Back</a>
+      <strong>Agents</strong>
+      <span id="status"></span>
+    </header>
+    <div class="wrap">
+      <div>
+        <div class="controls">
+          <button class="pill" id="refresh">Refresh</button>
+          <button class="pill" id="save">Save</button>
+        </div>
+        <div class="controls">
+          <span>agents.yml</span>
+        </div>
+        <textarea id="agents"></textarea>
+        <div class="controls" style="margin-top:8px;">
+          <span>skills.yml</span>
+        </div>
+        <textarea id="skills"></textarea>
+      </div>
+      <div>
+        <div class="controls">
+          <label>Filter agent:</label>
+          <select id="agentFilter">
+            <option value="">All</option>
+            <option value="planner">planner</option>
+            <option value="executor">executor</option>
+            <option value="validator">validator</option>
+          </select>
+          <label>Phase:</label>
+          <select id="phaseFilter">
+            <option value="">All</option>
+            <option value="plan">plan</option>
+            <option value="execute">execute</option>
+            <option value="validate">validate</option>
+          </select>
+        </div>
+        <div id="stream"></div>
+      </div>
+    </div>
+    <script>
+      const agentsEl = document.getElementById('agents');
+      const skillsEl = document.getElementById('skills');
+      const statusEl = document.getElementById('status');
+      const refreshBtn = document.getElementById('refresh');
+      const saveBtn = document.getElementById('save');
+      const stream = document.getElementById('stream');
+      const agentFilter = document.getElementById('agentFilter');
+      const phaseFilter = document.getElementById('phaseFilter');
+
+      async function load() {
+        statusEl.textContent = 'Loading...';
+        const r = await fetch('/api/agents');
+        const data = await r.json();
+        agentsEl.value = data.agents || '';
+        skillsEl.value = data.skills || '';
+        statusEl.textContent = '';
+      }
+      async function save() {
+        statusEl.textContent = 'Saving...';
+        const r = await fetch('/api/agents', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agents: agentsEl.value, skills: skillsEl.value }) });
+        const ok = (await r.json()).ok;
+        statusEl.textContent = ok ? 'Saved' : 'Error';
+        setTimeout(()=> statusEl.textContent = '', 1500);
+      }
+      refreshBtn.onclick = load;
+      saveBtn.onclick = save;
+      load();
+
+      function statusClass(ev){ if(ev.status==='error') return 'err'; if(ev.status==='awaiting_approval') return 'warn'; if(ev.status==='validated' || ev.kind==='end') return 'ok'; return 'info'; }
+      function render(ev){
+        const af = agentFilter.value, pf = phaseFilter.value;
+        if(af && (ev.agent||'')!==af) return;
+        if(pf && (ev.phase||'')!==pf) return;
+        const div = document.createElement('div');
+        div.className = 'event';
+        const s = statusClass(ev);
+        const ts = ev.ts ? new Date(ev.ts*1000).toISOString() : '';
+        const msg = JSON.stringify(ev.data||{}).replace(/</g,'&lt;');
+        div.innerHTML = `<div class="ts">${ts}</div><div><b>${ev.kind||''}</b> · <span class="${s}">${ev.status||''}</span> · ${ev.phase||''} · ${ev.agent||''}</div><div>${msg}</div>`;
+        stream.prepend(div);
+      }
+      const es = new EventSource('/events');
+      es.onmessage = (e)=>{ try { render(JSON.parse(e.data)); } catch {} };
+    </script>
+  </body>
+</html>
