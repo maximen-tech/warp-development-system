@@ -30,6 +30,13 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
 - Try examples in `examples/`
 - Agent-Led mode: start with `/init`, then run `/next` or `/autopilot`
 
+### Wave 1.3 Features (New!) 🆕
+- **Start the dashboard**: `cd tools/dashboard && npm install && npm run start` → http://localhost:3030
+- **Notifications**: Click the 🔔 bell icon → test with "Demo notifications" button
+- **Marketplace**: Visit 🛒 Marketplace → search "terminal" → preview & install items
+- **Collaboration**: See 👥 Online presence → click "Activity" for team feed → customize avatar in Settings
+- **All features work together**: Install from marketplace → get notifications → see team activity in real-time
+
 ## Repository map
 - `.warp/` — WARP.md, agent-config.yml, mcp-servers.yml, models/
 - `05_WORKFLOWS/` — slash-commands/, orchestration-templates/, github-actions/
@@ -63,7 +70,34 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
 | error                 | red row with error text                       | investigate; retries may apply |
 
 ## Dashboard advanced features
-- APIs
+### Wave 1.3: Hyperspeed Collaboration Features 🚀
+- **Notifications Center** (bell icon 🔔)
+  - Real-time SSE stream with <500ms latency
+  - Inline approve/dismiss actions for agent requests
+  - Sound notifications with toggle
+  - Mark all read functionality
+  - Auto-reconnect on connection loss
+  - APIs: GET /api/notifications/stream (SSE), GET /api/notifications, POST /api/notifications/mark-read, POST /api/notifications/action, POST /api/notifications/demo
+
+- **Marketplace UI** (🛒 Marketplace)
+  - Search/filter with tag support and real-time results
+  - Star ratings display with visual indicators
+  - One-click install with dependency resolution
+  - Install queue processing with progress feedback
+  - Preview modal with full item details and changelog
+  - Mobile-responsive grid layout
+  - APIs: GET /api/marketplace/items?search&type&tag&sort, POST /api/marketplace/install, POST /api/marketplace/uninstall, GET /api/marketplace/installed, POST /api/marketplace/rate
+
+- **Real-time Collaboration** (👥 Online)
+  - WebSocket presence indicators with user avatars
+  - Activity feed with real-time team updates
+  - Multi-user tracking across dashboard pages
+  - User status dots (🟢 active, 🟡 away)
+  - Heartbeat system for accurate presence
+  - User settings (name, avatar, status)
+  - APIs: GET /api/activity-feed, POST /api/session/update, GET /api/session/presence, POST /api/activity/log, WebSocket /collab-ws
+
+- **Core APIs** (existing)
   - GET /api/artifacts, GET /api/artifact/plan, GET /api/artifact/download/:name, GET /api/artifact/raw/:name
   - POST /api/events/append (append custom event; e.g., approval_granted)
 - GET /api/console, POST /api/clear-console
