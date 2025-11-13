@@ -81,12 +81,16 @@
         <div class="toolbar-divider"></div>
         <div class="toolbar-section">
           <button id="addBtn" class="action-btn primary">+ Add Agent</button>
-          <button id="bulkExportJson" class="action-btn">📥 Export</button>
+          <button id="reloadAgents" class="action-btn">🔄 Reload</button>
+          <button id="exportAgents" class="action-btn">📥 Export All</button>
+          <button id="bulkExportJson" class="action-btn">📦 Export Selected</button>
           <label class="action-btn" for="bulkImport" style="margin:0">📤 Import</label>
           <input id="bulkImport" type="file" accept="application/json,.csv" style="display:none" />
           <button id="bulkDelete" class="action-btn danger">🗑 Delete</button>
           <button id="bulkDuplicate" class="action-btn">📋 Duplicate</button>
           <button id="historyUI" class="action-btn">🕐 History</button>
+          <button id="changelogBtn" class="action-btn">📜 Changelog</button>
+          <button id="marketBtn" class="action-btn">🛒 Marketplace</button>
         </div>
       </div>
 
@@ -328,6 +332,8 @@
               <button class="action-btn" data-act="edit">✏ Edit</button>
               <button class="action-btn" data-act="test">🧪 Test</button>
               <button class="action-btn" data-act="connectors">🔌 Connect</button>
+              <button class="action-btn" data-act="copyjson">📋 Copy</button>
+              <button class="action-btn" data-act="export">📥 Export</button>
               <button class="action-btn danger" data-act="delete">🗑 Delete</button>
             </div>
           `;
@@ -336,6 +342,8 @@
           card.querySelector('[data-act="edit"]').onclick = ()=> openEditor('agent', a);
           card.querySelector('[data-act="test"]').onclick = ()=> testAgent(a);
           card.querySelector('[data-act="connectors"]').onclick = ()=> openConnectors(a);
+          card.querySelector('[data-act="copyjson"]').onclick = async ()=>{ await navigator.clipboard.writeText(JSON.stringify(a,null,2)); if(window.showToast) showToast('Agent copied to clipboard', 'success'); };
+          card.querySelector('[data-act="export"]').onclick = async ()=>{ const t = await (await fetch(`/api/agents/export-one?name=${encodeURIComponent(a.name)}&format=yaml`)).text(); const blob = new Blob([t],{type:'text/plain'}); const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`agent_${a.name}.yml`; link.click(); if(window.showToast) showToast('Agent exported', 'success'); };
           card.querySelector('[data-act="delete"]').onclick = ()=> deleteAgent(a);
           
           g.appendChild(card);
@@ -375,9 +383,8 @@
             </div>
           `;
           
-          card.querySelector('[data-act="copyjson"]').onclick = ()=> navigator.clipboard.writeText(JSON.stringify(s,null,2));
-          card.querySelector('[data-act="copyyaml"]')?.onclick = async ()=>{ const t = await (await fetch(`/api/skills/export-one?name=${encodeURIComponent(s.name)}&format=yaml`)).text(); await navigator.clipboard.writeText(t); };
-          card.querySelector('[data-act="export"]').onclick = async ()=>{ const t = await (await fetch(`/api/skills/export-one?name=${encodeURIComponent(s.name)}&format=yaml`)).text(); const blob = new Blob([t],{type:'text/plain'}); const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`skill_${s.name}.yml`; link.click(); };
+          card.querySelector('[data-act="copyjson"]').onclick = async ()=>{ await navigator.clipboard.writeText(JSON.stringify(s,null,2)); if(window.showToast) showToast('Skill copied to clipboard', 'success'); };
+          card.querySelector('[data-act="export"]').onclick = async ()=>{ const t = await (await fetch(`/api/skills/export-one?name=${encodeURIComponent(s.name)}&format=yaml`)).text(); const blob = new Blob([t],{type:'text/plain'}); const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`skill_${s.name}.yml`; link.click(); if(window.showToast) showToast('Skill exported', 'success'); };
           card.querySelector('[data-act="edit"]').onclick = ()=> openEditor('skill', s);
           card.querySelector('[data-act="delete"]').onclick = ()=> { if(attachedCount>0 && !confirm('Skill is attached to '+attachedCount+' agent(s). Detach and delete?')) return; deleteSkill(s); };
           sg.appendChild(card);
@@ -517,12 +524,28 @@
         const ghStatus=qs('#githubStatus'), slackStatus=qs('#slackStatus');
         const ghTile=qs('#githubTile'), slackTile=qs('#slackTile');
         
-        const cfg = (agent.connectors||{});
+        // Reset all tile states (BUG FIX #6)
+        ghTile.classList.remove('active');
+        slackTile.classList.remove('active');
+        ghStatus.classList.remove('active');
+        ghStatus.classList.add('inactive');
+        slackStatus.classList.remove('active');
+        slackStatus.classList.add('inactive');
+        ghFeedback.classList.remove('show', 'success', 'error');
+        slackFeedback.classList.remove('show', 'success', 'error');
+        
+        // Work on a copy to avoid mutation on cancel (BUG FIX #8)
+        S.editConnAgent = agent;
+        S.editConnCopy = JSON.parse(JSON.stringify(agent.connectors || {}));
+        
+        const cfg = S.editConnCopy;
         ghRepo.value = cfg.github?.repo||'';
         ghTok.value = cfg.github?.token||'';
         slack.value = cfg.slack?.webhook||'';
         
         // Update status badges
+        ghStatus.textContent = 'Not configured';
+        slackStatus.textContent = 'Not configured';
         if(cfg.github?.repo && cfg.github?.token){
           ghStatus.textContent = 'Configured';
           ghStatus.classList.remove('inactive');
@@ -536,7 +559,12 @@
           slackTile.classList.add('active');
         }
         
-        qs('#connTest').onclick = async ()=>{
+        const testBtn = qs('#connTest');
+        testBtn.onclick = async ()=>{
+          // Add loading state (BUG FIX #7)
+          testBtn.disabled = true;
+          testBtn.textContent = '⏳ Testing...';
+          
           ghFeedback.textContent = 'Testing...';
           ghFeedback.classList.remove('success', 'error');
           ghFeedback.classList.add('show');
@@ -563,15 +591,30 @@
             ghFeedback.classList.add('error');
             slackFeedback.textContent = '✗ Connection failed';
             slackFeedback.classList.add('error');
+          } finally {
+            // Restore button state
+            testBtn.disabled = false;
+            testBtn.textContent = '🧪 Test Connections';
           }
         };
         
-        qs('#connSave').onclick = async ()=>{
-          agent.connectors = { github:{ repo: ghRepo.value, token: ghTok.value }, slack:{ webhook: slack.value } };
-          await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent }) });
-          modal.classList.remove('show');
-          if(window.showToast) showToast('Connectors saved successfully', 'success');
-          await loadAll();
+        const saveBtn = qs('#connSave');
+        saveBtn.onclick = async ()=>{
+          // Update copy then apply to original (BUG FIX #8)
+          S.editConnAgent.connectors = { github:{ repo: ghRepo.value, token: ghTok.value }, slack:{ webhook: slack.value } };
+          saveBtn.disabled = true;
+          saveBtn.textContent = '⏳ Saving...';
+          try{
+            await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent: S.editConnAgent }) });
+            modal.classList.remove('show');
+            if(window.showToast) showToast('Connectors saved successfully', 'success');
+            await loadAll();
+          } catch(err) {
+            if(window.showToast) showToast('Save failed: ' + err.message, 'error');
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '✓ Save';
+          }
         };
       }
 
@@ -603,12 +646,13 @@
       function mergeEdited(list, obj){ const i = list.findIndex(x=>x.name===obj.name); if(i>=0){ const copy = list.slice(); copy[i] = obj; return copy; } else { return [...list, obj]; } }
 
       async function validateAndMaybeSave(silent){
-        const ok = await validateLive(); if(!ok && !silent){ alert('Please fix validation errors'); return; }
+        const ok = await validateLive(); if(!ok && !silent){ if(window.showToast) showToast('Please fix validation errors', 'warning'); return; }
         if(silent) return;
         const res = await fetch('/api/agents/save',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents:S.agents, skills:S.skills, reason: (S.saveReason||null) }) }); S.saveReason=null;
-        const j = await res.json(); if(!j.ok) return alert('Save failed');
+        const j = await res.json(); if(!j.ok){ if(window.showToast) showToast('Save failed', 'error'); return; }
         await fetch('/api/agents/reload',{ method:'POST' });
         showModal(false); await loadAll();
+        if(!silent && window.showToast) showToast('Changes saved successfully', 'success');
       }
 
       async function saveEdit(){
@@ -628,7 +672,7 @@
         await validateAndMaybeSave(false);
       }
 
-      async function testAgent(a){ const prompt = window.prompt('Test prompt','Hello'); if(prompt===null) return; await fetch('/api/agents/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent:a.name, prompt }) }); alert('Test triggered (see timeline/log)'); }
+      async function testAgent(a){ const prompt = window.prompt('Test prompt','Hello'); if(prompt===null) return; try{ await fetch('/api/agents/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent:a.name, prompt }) }); if(window.showToast) showToast('Test triggered successfully', 'success', 3000, 'Agent Test'); }catch(err){ if(window.showToast) showToast('Test failed: '+err.message, 'error'); } }
       async function expandAgent(card, a){
         openModal('#detailsModal');
         qs('#detailsTitle').textContent = `Agent: ${a.name}`;
@@ -652,8 +696,8 @@
       // sort + auto-expand prefs
       const sortEl = qs('#sortBy'); if(sortEl){ sortEl.value = S.sortBy||'manual'; sortEl.onchange = ()=>{ S.sortBy = sortEl.value; localStorage.setItem('agents.sortBy', S.sortBy); render(); }; }
       const autoEl = qs('#autoExpandErr'); if(autoEl){ autoEl.checked = !!S.autoExpandErr; autoEl.onchange = ()=>{ S.autoExpandErr = !!autoEl.checked; localStorage.setItem('agents.autoExpandErr', S.autoExpandErr ? '1':'0'); }; }
-      qs('#reloadAgents').onclick = async ()=>{ await fetch('/api/agents/reload',{ method:'POST' }); alert('Reload event sent'); };
-      qs('#historyBtn').onclick = async ()=>{ const h = await (await fetch('/api/agents/history')).json(); alert((h.backups||[]).map(b=>`${new Date(b.ts).toLocaleString()} · ${b.name}`).join('\n')||'No backups'); };
+      qs('#reloadAgents').onclick = async ()=>{ try{ await fetch('/api/agents/reload',{ method:'POST' }); if(window.showToast) showToast('Agents reloaded', 'success'); await loadAll(); }catch(err){ if(window.showToast) showToast('Reload failed', 'error'); } };
+      qs('#historyBtn').onclick = async ()=>{ openModal('#diffModal'); try{ const h = await (await fetch('/api/agents/history')).json(); const sel = qs('#backupSelect'); sel.innerHTML=''; for(const b of (h.backups||[])){ const o=document.createElement('option'); o.value=b.name; o.textContent = `${new Date(b.ts).toLocaleString()} · ${b.name}`; sel.appendChild(o); } }catch{} };
       qs('#changelogBtn').onclick = ()=>{ openModal('#changelogModal'); };
       (function(){ const src = new EventSource('/agents-changes'); const list = document.getElementById('chgList'); src.onmessage = (e)=>{ try{ const ev = JSON.parse(e.data); const div = document.createElement('div'); div.textContent = `[${new Date((ev.ts||0)*1000).toLocaleTimeString()}] ${ev.kind} ${JSON.stringify(ev.details||{})}`; const btn = document.createElement('button'); btn.className='pill'; btn.textContent='Undo this'; btn.onclick = async ()=>{ const d = ev.details||{}; const names=[]; if(d.beforeAgents) names.push(d.beforeAgents); if(d.beforeSkills) names.push(d.beforeSkills); if(!names.length) return alert('No backup to rollback to for this entry'); await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names }) }); await loadAll(); }; const row = document.createElement('div'); row.className='row'; row.style.justifyContent='space-between'; row.appendChild(div); row.appendChild(btn); list.prepend(row); }catch{} }; })();
       qs('#historyUI').onclick = async ()=>{ openModal('#diffModal'); try{ const h = await (await fetch('/api/agents/history')).json(); const sel = qs('#backupSelect'); sel.innerHTML=''; for(const b of (h.backups||[])){ const o=document.createElement('option'); o.value=b.name; o.textContent = `${new Date(b.ts).toLocaleString()} · ${b.name}`; sel.appendChild(o); } }catch{} };
