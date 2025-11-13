@@ -317,6 +317,27 @@ app.get('/api/skills/export-one', async (req,res)=>{
 // Connectors test stub
 app.post('/api/connectors/test', (req,res)=>{ try{ const { type, config } = req.body||{}; res.json({ ok:true, type, echo: config||{} }); }catch(e){ res.status(500).json({ error:String(e) }); } });
 
+// Marketplace: import skills by URL (preview only)
+app.post('/api/skills/import-url', async (req,res)=>{
+  try{
+    const { url } = req.body||{}; if(!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error:'invalid url' });
+    const { default: fetch } = await import('node-fetch');
+    const r = await fetch(url, { redirect:'follow' }); if(!r.ok) return res.status(400).json({ error:`fetch failed ${r.status}` });
+    const text = await r.text(); const trimmed = text.trim(); let skills=[];
+    try{
+      if(trimmed.startsWith('{') || trimmed.startsWith('[')){
+        const parsed = JSON.parse(trimmed); if(Array.isArray(parsed)) skills = parsed; else if(Array.isArray(parsed.skills)) skills = parsed.skills; else return res.status(400).json({ error:'no skills array found' });
+      } else {
+        const YAML = (await import('yaml')).default; const y = YAML.parse(trimmed); if(Array.isArray(y)) skills = y; else if(Array.isArray(y.skills)) skills = y.skills; else return res.status(400).json({ error:'no skills array found' });
+      }
+    } catch(e){ return res.status(400).json({ error: 'parse failed', details:String(e) }); }
+    // validate shape roughly
+    const bad = skills.filter(s=> !s || !s.name);
+    if(bad.length) return res.status(400).json({ error:'invalid skills entries' });
+    res.json({ ok:true, skills });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
 // Agent logs (last N entries)
 app.get('/api/agents/logs', (req,res)=>{
   try{ const agent = (req.query.agent||'').trim(); const limit = Math.max(1, Math.min(500, parseInt(req.query.limit||'100',10))); if(!agent) return res.status(400).json({ error:'missing agent' }); if(!fs.existsSync(eventsFile)) return res.json({ events:[] }); const lines = fs.readFileSync(eventsFile,'utf-8').trim().split('\n').filter(Boolean).reverse(); const out=[]; for(const line of lines){ try{ const ev = JSON.parse(line); if(ev.agent===agent){ out.push(ev); if(out.length>=limit) break; } }catch{} } res.json({ events: out.reverse() }); }catch(e){ res.status(500).json({ error:String(e) }); }

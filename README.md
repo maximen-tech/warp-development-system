@@ -75,8 +75,9 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
   - GET /api/agents/history, GET /api/agents/diff?name=..., POST /api/agents/rollback-group
   - GET /api/agents/status?window=..., GET /api/agents/logs?agent&limit
   - GET /api/agents/changelog, GET /api/agents/export-one?name&format=json|yaml
-  - GET /api/skills, POST /api/skills/save, POST /api/skills/item, DELETE /api/skills/item
+- GET /api/skills, POST /api/skills/save, POST /api/skills/item, DELETE /api/skills/item
   - GET /api/skills/history, POST /api/skills/rollback, GET /api/skills/usage, GET /api/skills/export-one?name&format=yaml|json
+  - POST /api/skills/import-url { url } (preview only)
   - POST /api/connectors/test { type, config }
   - GET/POST /api/theme, GET/POST /api/approval-mode
   - GET /api/kpi?window=15m|1h|24h&runId=...&format=json|csv

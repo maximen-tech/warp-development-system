@@ -1,0 +1,17 @@
+agents:
+  reviewer:
+    role: code_reviewer
+    model: claude-execution
+    skills: [code_review]
+    limits:
+      max_diff_lines: 500
+  tester:
+    role: test_author
+    model: claude-execution
+    skills: [test_generator]
+  release_captain:
+    role: deploy_planner
+    model: deepseek-planning
+    skills: [deploy_planner]
+    approvals:
+      required: true

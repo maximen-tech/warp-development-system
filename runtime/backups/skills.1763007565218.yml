@@ -1,0 +1,19 @@
+skills:
+  code_review:
+    description: Static review focusing on diffs, style, and complexity
+    inputs: [diff, files]
+    outputs: [comments, score]
+    guardrails:
+      - no personal data in comments
+  test_generator:
+    description: Generate unit tests for changed files
+    inputs: [files]
+    outputs: [tests]
+    guardrails:
+      - respect existing test framework
+  deploy_planner:
+    description: Plan safe deploy with gates and rollback
+    inputs: [env]
+    outputs: [steps]
+    guardrails:
+      - require staging before prod

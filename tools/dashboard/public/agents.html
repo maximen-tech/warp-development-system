@@ -59,6 +59,45 @@
       </div>
     </div>
 
+    <!-- Diff & Rollback Modal -->
+    <div class="modal" id="diffModal" style="display:none">
+      <div class="content">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <strong>Diff & Rollback</strong>
+          <button class="pill" onclick="closeModal('#diffModal')">Close</button>
+        </div>
+        <div class="row" style="gap:8px">
+          <select id="backupSelect" class="pill"></select>
+          <button class="pill" id="loadDiff">Load diff</button>
+          <button class="pill" id="doRollback">Rollback</button>
+        </div>
+        <pre id="diffOut" class="small" style="white-space:pre-wrap;max-height:50vh;overflow:auto"></pre>
+      </div>
+    </div>
+
+    <!-- Import Wizard Modal -->
+    <div class="modal" id="importModal" style="display:none">
+      <div class="content">
+        <div class="row" style="justify-content:space-between;align-items:center"><strong>Import Wizard</strong><button class="pill" onclick="closeModal('#importModal')">Close</button></div>
+        <div id="dropzone" class="card" style="padding:12px;border-style:dashed">Drag & drop JSON/CSV here or use toolbar Import JSON</div>
+        <div class="small" id="importStatus"></div>
+        <div id="importTable" class="small" style="max-height:40vh;overflow:auto"></div>
+        <div class="row" style="justify-content:flex-end"><button class="pill" id="applyImport" disabled>Apply selected</button></div>
+      </div>
+    </div>
+
+    <!-- Details Drawer Modal -->
+    <div class="modal" id="detailsModal" style="display:none">
+      <div class="content" style="max-width:900px">
+        <div class="row" style="justify-content:space-between;align-items:center"><strong id="detailsTitle">Agent details</strong><button class="pill" onclick="closeModal('#detailsModal')">Close</button></div>
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px">
+          <div class="card"><div class="small">Status</div><pre id="detStatus" class="small"></pre></div>
+          <div class="card"><div class="small">Logs</div><pre id="detLogs" class="small" style="max-height:200px;overflow:auto"></pre></div>
+          <div class="card" style="grid-column:1/3"><div class="small">Timeline (recent)</div><pre id="detTimeline" class="small" style="max-height:200px;overflow:auto"></pre></div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal" id="editorModal">
       <div class="content">
         <div class="row" style="justify-content:space-between;align-items:center">
@@ -79,6 +118,10 @@
       const qs = (s,el=document)=>el.querySelector(s);
       const qsa = (s,el=document)=>Array.from(el.querySelectorAll(s));
       function showModal(on){ qs('#editorModal').style.display = on?'flex':'none'; }
+
+      // Lightweight modal helper for other modals
+      function openModal(id){ const m = qs(id); if(m) m.style.display='flex'; }
+      function closeModal(id){ const m = qs(id); if(m) m.style.display='none'; }
 
       async function loadAll(){
         const list = await (await fetch('/api/agents/list')).json();
@@ -105,7 +148,7 @@
               </div>
               <div class="row">
                 <input type="checkbox" data-select />
-                <button class="pill" data-act="expand">Expand</button>
+                <button class="pill" data-act="expand">Details</button>
                 <button class="pill" data-act="edit">Edit</button>
                 <button class="pill" data-act="test">Test</button>
                 <button class="pill" data-act="copyjson">Copy JSON</button>
@@ -138,21 +181,28 @@
         const sg = qs('#skillCards'); sg.innerHTML='';
         for(const s of S.skills){
           if(f){ const hay = [s.name,s.description].join(' ').toLowerCase(); if(!hay.includes(f)) continue; }
+          const attachedCount = S.agents.reduce((acc,a)=> acc + ((a.skills||[]).includes(s.name)?1:0), 0);
           const card = document.createElement('div'); card.className='card'; card.dataset.name=s.name||'';
           card.innerHTML = `
             <div class="row" style="justify-content:space-between;align-items:center">
               <div>
-                <div><b>${s.name||'(unnamed)'}</b></div>
+                <div><b>${s.name||'(unnamed)'}</b> <span class="small">(${attachedCount} attached)</span></div>
                 <div class="small">${(s.description||'').slice(0,120)}</div>
               </div>
               <div class="row">
+                <button class="pill" data-act="copyjson">Copy JSON</button>
+                <button class="pill" data-act="copyyaml">Copy YAML</button>
+                <button class="pill" data-act="export">Export</button>
                 <button class="pill" data-act="edit">Edit</button>
                 <button class="pill" data-act="delete">Delete</button>
               </div>
             </div>
           `;
+          card.querySelector('[data-act="copyjson"]').onclick = ()=> navigator.clipboard.writeText(JSON.stringify(s,null,2));
+          card.querySelector('[data-act="copyyaml"]').onclick = async ()=>{ const t = await (await fetch(`/api/skills/export-one?name=${encodeURIComponent(s.name)}&format=yaml`)).text(); await navigator.clipboard.writeText(t); };
+          card.querySelector('[data-act="export"]').onclick = async ()=>{ const t = await (await fetch(`/api/skills/export-one?name=${encodeURIComponent(s.name)}&format=yaml`)).text(); const blob = new Blob([t],{type:'text/plain'}); const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`skill_${s.name}.yml`; link.click(); };
           card.querySelector('[data-act="edit"]').onclick = ()=> openEditor('skill', s);
-          card.querySelector('[data-act="delete"]').onclick = ()=> deleteSkill(s);
+          card.querySelector('[data-act="delete"]').onclick = ()=> { if(attachedCount>0 && !confirm('Skill is attached to '+attachedCount+' agent(s). Detach and delete?')) return; deleteSkill(s); };
           sg.appendChild(card);
         }
         enableDrag();
@@ -334,9 +384,20 @@
 
       async function testAgent(a){ const prompt = window.prompt('Test prompt','Hello'); if(prompt===null) return; await fetch('/api/agents/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent:a.name, prompt }) }); alert('Test triggered (see timeline/log)'); }
       async function expandAgent(card, a){
-        let pane = card.querySelector('.expand'); if(!pane){ pane = document.createElement('div'); pane.className='expand small'; pane.style.marginTop='8px'; pane.style.whiteSpace='pre-wrap'; card.appendChild(pane); }
-        pane.textContent = 'Loading logs...';
-        try{ const j = await (await fetch(`/api/agents/logs?agent=${encodeURIComponent(a.name)}&limit=50`)).json(); const st = S.status[a.name]||{}; const head = `traffic=${st.traffic||0} errors=${st.errors||0}\n`; const lines = (j.events||[]).map(ev=>`${new Date((ev.ts||0)*1000).toLocaleTimeString()} ${ev.kind||''} ${ev.status||''}`); pane.textContent = head + (lines.join('\n')||'No recent logs'); } catch{ pane.textContent='No logs'; }
+        // Open details drawer and populate status, logs, and a recent timeline (basic)
+        openModal('#detailsModal');
+        qs('#detailsTitle').textContent = `Agent: ${a.name}`;
+        try {
+          const st = (await (await fetch('/api/agents/status?window=3600')).json()).status || {};
+          const s = st[a.name] || {};
+          qs('#detStatus').textContent = JSON.stringify(s, null, 2);
+        } catch { qs('#detStatus').textContent = 'status unavailable'; }
+        try{
+          const j = await (await fetch(`/api/agents/logs?agent=${encodeURIComponent(a.name)}&limit=100`)).json();
+          const lines = (j.events||[]).map(ev=>`${new Date((ev.ts||0)*1000).toLocaleTimeString()} ${ev.kind||''} ${ev.status||''}`);
+          qs('#detLogs').textContent = lines.join('\n')||'No logs';
+          qs('#detTimeline').textContent = lines.slice(-50).join('\n');
+        }catch{ qs('#detLogs').textContent='No logs'; qs('#detTimeline').textContent=''; }
       }
 
       // events
@@ -347,14 +408,40 @@
       qs('#healthFilter').onchange = ()=> render();
       qs('#reloadAgents').onclick = async ()=>{ await fetch('/api/agents/reload',{ method:'POST' }); alert('Reload event sent'); };
       qs('#historyBtn').onclick = async ()=>{ const h = await (await fetch('/api/agents/history')).json(); alert((h.backups||[]).map(b=>`${new Date(b.ts).toLocaleString()} · ${b.name}`).join('\n')||'No backups'); };
-      qs('#historyUI').onclick = async ()=>{ const h = await (await fetch('/api/agents/history')).json(); const name = prompt('Backup to diff/rollback (exact filename):\n'+(h.backups||[]).map(b=>b.name).join('\n')); if(!name) return; const d = await (await fetch(`/api/agents/diff?name=${encodeURIComponent(name)}`)).json(); alert((d.agentsDiff||'') + (d.skillsDiff||'')); if(confirm('Rollback to this backup?')){ await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names:[name] }) }); await loadAll(); } };
+      qs('#historyUI').onclick = async ()=>{ openModal('#diffModal'); try{ const h = await (await fetch('/api/agents/history')).json(); const sel = qs('#backupSelect'); sel.innerHTML=''; for(const b of (h.backups||[])){ const o=document.createElement('option'); o.value=b.name; o.textContent = `${new Date(b.ts).toLocaleString()} · ${b.name}`; sel.appendChild(o); } }catch{} };
+      qs('#loadDiff').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; const d = await (await fetch(`/api/agents/diff?name=${encodeURIComponent(name)}`)).json(); qs('#diffOut').textContent = (d.agentsDiff||'') + (d.skillsDiff? ('\n'+d.skillsDiff) : ''); };
+      qs('#doRollback').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; if(!confirm('Rollback to '+name+'?')) return; await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names:[name] }) }); closeModal('#diffModal'); await loadAll(); };
       qs('#exportAgents').onclick = async ()=>{ const j = await (await fetch('/api/agents/export?format=json')).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_export.json'; a.click(); };
       qs('#bulkExportJson').onclick = async ()=>{
         const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean);
         const url = '/api/agents/export?format=json'+(selected.length? `&names=${encodeURIComponent(selected.join(','))}`:'');
         const j = await (await fetch(url)).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_selected.json'; a.click();
       };
-      qs('#bulkImport').onchange = async (e)=>{ const file = e.target.files[0]; if(!file) return; const text = await file.text(); try{ const payload = JSON.parse(text); const dry = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...payload, partial:true, dryRun:true }) })).json(); if(!dry.ok){ return alert('Import errors: '+JSON.stringify(dry.errors)); } const apply = confirm('Apply import?'); if(!apply) return; const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...payload, partial:true, dryRun:false }) })).json(); if(!res.ok) return alert('Import failed'); await loadAll(); } catch{ alert('Invalid JSON'); } };
+      qs('#bulkImport').onchange = async (e)=>{ const file = e.target.files[0]; if(!file) return; openModal('#importModal'); const status = qs('#importStatus'); const table = qs('#importTable'); status.textContent='Parsing...'; let payload=null; try{ const text = await file.text(); if(file.type==='application/json' || text.trim().startsWith('{') || text.trim().startsWith('[')){ payload = JSON.parse(text); } else { // naive CSV to agents list
+            const rows = text.split(/\r?\n/).filter(Boolean).map(r=>r.split(',')); const head = rows.shift()||[]; const idxName=head.indexOf('name'), idxRole=head.indexOf('role'), idxModel=head.indexOf('model'), idxSkills=head.indexOf('skills'); const agents=[]; for(const r of rows){ agents.push({ name:r[idxName], role:r[idxRole], model:r[idxModel], skills:(r[idxSkills]||'').split('|').filter(Boolean) }); } payload={ agents }; }
+          // Preview table
+          const agents = Array.isArray(payload.agents)? payload.agents: []; const skills = Array.isArray(payload.skills)? payload.skills: [];
+          const rows = [];
+          rows.push('<div><b>Agents</b></div>'); rows.push('<table class="small"><tr><th><input type="checkbox" id="selAllAgents"/></th><th>Name</th><th>Role</th><th>Model</th><th>Skills</th></tr>');
+          agents.forEach((a,i)=>{ rows.push(`<tr><td><input type=checkbox data-kind=agent data-index=${i} checked/></td><td>${a.name||''}</td><td>${a.role||''}</td><td>${a.model||''}</td><td>${(a.skills||[]).join(',')}</td></tr>`); }); rows.push('</table>');
+          rows.push('<div style="margin-top:8px"><b>Skills</b></div>'); rows.push('<table class="small"><tr><th><input type="checkbox" id="selAllSkills"/></th><th>Name</th><th>Description</th></tr>');
+          skills.forEach((s,i)=>{ rows.push(`<tr><td><input type=checkbox data-kind=skill data-index=${i} checked/></td><td>${s.name||''}</td><td>${(s.description||'').slice(0,60)}</td></tr>`); }); rows.push('</table>');
+          table.innerHTML = rows.join('');
+          const getSelection = ()=>{ const selAgents = []; const selSkills=[]; qsa('[data-kind=agent]:checked', table).forEach(cb=> selAgents.push(agents[parseInt(cb.dataset.index,10)])); qsa('[data-kind=skill]:checked', table).forEach(cb=> selSkills.push(skills[parseInt(cb.dataset.index,10)])); return { agents: selAgents, skills: selSkills } };
+          const validateSel = async ()=>{ const sel = getSelection(); const dry = await (await fetch('/api/agents/validate-json',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills }) })).json(); status.textContent = dry.ok? 'Valid ✓' : 'Errors: '+(dry.errors||[]).map(e=>e.file+': '+e.error).join(' | '); qs('#applyImport').disabled = !dry.ok; };
+          qsa('input[type=checkbox]', table).forEach(cb=> cb.onchange = validateSel);
+          qs('#selAllAgents')?.addEventListener('change', (ev)=>{ const on = ev.target.checked; qsa('[data-kind=agent]', table).forEach(cb=> cb.checked=on); validateSel(); });
+          qs('#selAllSkills')?.addEventListener('change', (ev)=>{ const on = ev.target.checked; qsa('[data-kind=skill]', table).forEach(cb=> cb.checked=on); validateSel(); });
+          await validateSel();
+          qs('#applyImport').onclick = async ()=>{ const sel = getSelection(); // dry-run
+            const dry = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:true }) })).json(); if(!dry.ok){ status.textContent='Errors: '+JSON.stringify(dry.errors); return; }
+            const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:false }) })).json(); if(!res.ok){ status.textContent='Apply failed'; return; }
+            closeModal('#importModal'); await loadAll();
+          };
+        } catch{ status.textContent='Invalid file'; } };
+
+      // Drag & drop importer
+      (function(){ const dz = document.getElementById('dropzone'); if(!dz) return; dz.ondragover = (e)=>{ e.preventDefault(); dz.style.borderColor='var(--info)'; }; dz.ondragleave = ()=>{ dz.style.borderColor='var(--border)'; }; dz.ondrop = async (e)=>{ e.preventDefault(); dz.style.borderColor='var(--border)'; const f = e.dataTransfer.files[0]; if(!f) return; const input = document.getElementById('bulkImport'); input.files = e.dataTransfer.files; input.onchange({ target: input }); }; })();
       qs('#bulkDelete').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); if(!confirm('Delete '+selected.length+' agents?')) return; for(const name of selected){ await fetch(`/api/agents/item?name=${encodeURIComponent(name)}`,{ method:'DELETE' }); } await loadAll(); };
       qs('#bulkDuplicate').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); const list = S.agents.filter(a=>selected.includes(a.name)); for(const a of list){ const copy = JSON.parse(JSON.stringify(a)); copy.name = a.name+'-copy'; await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent: copy }) }); } await loadAll(); };
       qs('#closeModal').onclick = ()=> showModal(false);
