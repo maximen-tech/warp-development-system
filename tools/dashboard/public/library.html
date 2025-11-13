@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prompt Library - Warp Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/library.css" />
+  </head>
+  <body>
+    <header>
+      <a class="pill" href="/">← Dashboard</a>
+      <strong>Prompt Library</strong>
+      <button class="pill" onclick="showTemplates()">📚 Templates</button>
+      <button class="pill" onclick="showCreateModal()">➕ New Prompt</button>
+      <button class="pill" onclick="importPrompts()">📥 Import</button>
+      <button class="pill" onclick="exportPrompts()">📤 Export</button>
+    </header>
+    
+    <div class="wrap">
+      <!-- Filters & Search -->
+      <div class="card" style="margin-bottom: 1rem;">
+        <div class="row" style="gap: 12px; flex-wrap: wrap; align-items: center;">
+          <input id="search" class="pill" placeholder="🔍 Search prompts..." style="flex: 1; min-width: 200px;" />
+          <select id="filterTags" class="pill" onchange="applyFilters()">
+            <option value="">All Tags</option>
+          </select>
+          <select id="filterModel" class="pill" onchange="applyFilters()">
+            <option value="">All Models</option>
+            <option value="claude">Claude</option>
+            <option value="gpt">GPT</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="router">Router</option>
+          </select>
+          <label class="pill" style="cursor: pointer; user-select: none;">
+            <input type="checkbox" id="filterStarred" onchange="applyFilters()" style="margin-right: 4px;" />
+            ⭐ Starred Only
+          </label>
+          <select id="sortBy" class="pill" onchange="applyFilters()">
+            <option value="recent">Recent First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="title">Title A-Z</option>
+            <option value="usage">Most Used</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Prompt Grid -->
+      <div id="promptGrid" class="prompt-grid"></div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="editModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 id="modalTitle">New Prompt</h2>
+          <button class="pill" onclick="closeModal()">✕</button>
+        </div>
+        
+        <div class="kv"><label class="small">Title</label><div><input id="editTitle" class="pill" /></div></div>
+        <div class="kv"><label class="small">Tags</label><div><input id="editTags" class="pill" placeholder="comma,separated" /></div></div>
+        <div class="kv"><label class="small">Model</label><div><input id="editModel" class="pill" placeholder="claude/gpt/router..." /></div></div>
+        <div class="kv"><label class="small">Notes</label><div><input id="editNotes" class="pill" /></div></div>
+        <div class="kv">
+          <label class="small">Prompt Body <span style="opacity: 0.6;">(use {{variable}} for variables)</span></label>
+          <div><textarea id="editBody" rows="10" style="width:100%; font-family: monospace;"></textarea></div>
+        </div>
+        
+        <div class="row" style="gap: 8px; margin-top: 1rem;">
+          <button class="pill" onclick="previewPrompt()" style="flex: 1;">👁 Preview (resolve vars)</button>
+          <button class="pill" onclick="savePrompt()" style="flex: 1; background: var(--accent); color: white;">💾 Save</button>
+        </div>
+        
+        <div id="previewSection" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-card); border-radius: 8px;">
+          <strong class="small">Preview (variables resolved):</strong>
+          <pre id="previewBody" class="small" style="margin-top: 0.5rem; white-space: pre-wrap; max-height: 300px; overflow: auto;"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Template Gallery Modal -->
+    <div id="templateModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2>Prompt Templates</h2>
+          <button class="pill" onclick="closeTemplateModal()">✕</button>
+        </div>
+        <div id="templateGrid" class="template-grid"></div>
+      </div>
+    </div>
+
+    <!-- Version History Modal -->
+    <div id="versionModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2>Version History</h2>
+          <button class="pill" onclick="closeVersionModal()">✕</button>
+        </div>
+        <div id="versionList" class="version-list"></div>
+      </div>
+    </div>
+
+    <!-- Chain Builder Modal -->
+    <div id="chainModal" class="modal" style="display: none;">
+      <div class="modal-content" style="max-width: 900px;">
+        <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2>Prompt Chain Builder</h2>
+          <button class="pill" onclick="closeChainModal()">✕</button>
+        </div>
+        
+        <div class="kv"><label class="small">Chain Name</label><div><input id="chainName" class="pill" /></div></div>
+        
+        <div id="chainSteps" class="chain-steps"></div>
+        
+        <div class="row" style="gap: 8px; margin-top: 1rem;">
+          <button class="pill" onclick="addChainStep()">➕ Add Step</button>
+          <button class="pill" onclick="saveChain()" style="background: var(--accent); color: white;">💾 Save Chain</button>
+          <button class="pill" onclick="runChain()">▶ Run Chain</button>
+        </div>
+        
+        <div id="chainOutput" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-card); border-radius: 8px;">
+          <strong class="small">Chain Output:</strong>
+          <pre id="chainResult" class="small" style="margin-top: 0.5rem; white-space: pre-wrap; max-height: 400px; overflow: auto;"></pre>
+        </div>
+      </div>
+    </div>
+
+    <script src="/library.js"></script>
+  </body>
+</html>

@@ -819,9 +819,144 @@ app.post('/api/terminal/exec', (req,res)=>{
 // Prompt factory
 const promptLogFile = path.join(runtimeDir, 'prompts.jsonl');
 app.get('/api/prompts', (_req,res)=>{ try{ const lines = fs.existsSync(promptLogFile)? fs.readFileSync(promptLogFile,'utf-8').trim().split('\n').filter(Boolean).slice(-200).map(l=>JSON.parse(l)) : []; res.json({ entries: lines }); }catch(e){ res.status(500).json({ error:String(e) }); } });
-app.post('/api/prompts/save', (req,res)=>{ try{ const { title, body, tags, notes } = req.body||{}; const id = Math.random().toString(16).slice(2,10); const rec = { ts: Date.now()/1000, id, title, body, tags: tags||[], notes: notes||'' }; fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'prompt_save', ...rec })+'\n','utf-8'); res.json({ ok:true, id }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+app.post('/api/prompts/save', (req,res)=>{ try{ const { id, title, body, tags, model, notes } = req.body||{}; const promptId = id || Math.random().toString(16).slice(2,10); const rec = { ts: Date.now()/1000, id: promptId, title, body, tags: tags||[], model: model||'router', notes: notes||'', version: 1 }; fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'prompt_save', ...rec })+'\n','utf-8'); const db = loadPromptsDb(); db[promptId] = rec; savePromptsDb(db); res.json({ ok:true, id: promptId }); }catch(e){ res.status(500).json({ error:String(e) }); } });
 app.post('/api/prompts/run', (req,res)=>{ try{ const { id, body, model, optimizeIdea } = req.body||{}; const promptText = body||''; const out = `[stub:${model||'router'}] ${promptText.slice(0,200)}\nSuggestion: ${optimizeIdea||''}`; const now=Date.now()/1000; const evReq = { ts: now, kind:'agent_request', status:'ok', agent:'prompt_factory', data:{ model:model||'router', prompt: promptText.slice(0,200)} }; const evRes = { ts: now+0.05, kind:'agent_response', status:'ok', agent:'prompt_factory', data:{ output: out } }; fs.appendFileSync(eventsFile, JSON.stringify(evReq)+'\n','utf-8'); fs.appendFileSync(eventsFile, JSON.stringify(evRes)+'\n','utf-8'); fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'prompt_run', ts: now, id: id||null, body: promptText, model: model||null, optimizeIdea: optimizeIdea||null, output: out })+'\n','utf-8'); res.json({ ok:true, output: out }); }catch(e){ res.status(500).json({ error:String(e) }); } });
-app.get('/api/prompts/export', (req,res)=>{ try{ const fmt=String(req.query.format||'json'); const lines = fs.existsSync(promptLogFile)? fs.readFileSync(promptLogFile,'utf-8').trim().split('\n').filter(Boolean).map(l=>JSON.parse(l)) : []; if(fmt==='csv'){ const rows=['ts,kind,id,title,tags']; for(const r of lines){ rows.push(`${r.ts||''},${r.kind||''},${r.id||''},"${(r.title||'').replace(/"/g,'\"')}","${(Array.isArray(r.tags)?r.tags.join('|'):'').replace(/"/g,'\"')}"`);} res.setHeader('Content-Type','text/csv'); return res.send(rows.join('\n')); } res.json({ entries: lines }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+app.get('/api/prompts/export', (req,res)=>{ try{ const fmt=String(req.query.format||'json'); const lines = fs.existsSync(promptLogFile)? fs.readFileSync(promptLogFile,'utf-8').trim().split('\n').filter(Boolean).map(l=>JSON.parse(l)) : []; if(fmt==='csv'){ const rows=['ts,kind,id,title,tags']; for(const r of lines){ rows.push(`${r.ts||''},${r.kind||''},${r.id||''},"${(r.title||'').replace(/"/g,'\\"')}","${(Array.isArray(r.tags)?r.tags.join('|'):'').replace(/"/g,'\\"')}"`);} res.setHeader('Content-Type','text/csv'); return res.send(rows.join('\n')); } res.json({ entries: lines }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+
+// Prompt Library Pro - Extended APIs
+const promptsDbFile = path.join(runtimeDir, 'prompts_db.json');
+function loadPromptsDb(){ try{ return fs.existsSync(promptsDbFile)? JSON.parse(fs.readFileSync(promptsDbFile,'utf-8')||'{}') : {}; }catch{ return {}; } }
+function savePromptsDb(db){ try{ fs.writeFileSync(promptsDbFile, JSON.stringify(db,null,2),'utf-8'); }catch{} }
+
+app.get('/api/prompts/library', (_req,res)=>{
+  try{
+    const db = loadPromptsDb();
+    const prompts = Object.values(db).map(p=>({ id: p.id, title: p.title, body: p.body, tags: p.tags||[], model: p.model||'router', notes: p.notes||'', ts: p.ts||0, lastUsed: p.lastUsed||0, version: p.version||1 }));
+    res.json({ prompts });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+app.post('/api/prompts/update', (req,res)=>{
+  try{
+    const { id, title, body, tags, model, notes } = req.body||{};
+    if(!id) return res.status(400).json({ error:'missing id' });
+    const db = loadPromptsDb();
+    if(!db[id]) return res.status(404).json({ error:'not found' });
+    const prev = db[id];
+    const versions = prev.versions || [{ ts: prev.ts, body: prev.body, title: prev.title }];
+    versions.push({ ts: Date.now()/1000, body: prev.body, title: prev.title });
+    db[id] = { ...prev, title: title||prev.title, body: body||prev.body, tags: tags||prev.tags, model: model||prev.model, notes: notes||prev.notes, version: (prev.version||1)+1, versions: versions.slice(-10) };
+    savePromptsDb(db);
+    fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'prompt_update', ts: Date.now()/1000, id, title })+'\n','utf-8');
+    res.json({ ok:true });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+app.post('/api/prompts/delete', (req,res)=>{
+  try{
+    const { id } = req.body||{};
+    if(!id) return res.status(400).json({ error:'missing id' });
+    const db = loadPromptsDb();
+    delete db[id];
+    savePromptsDb(db);
+    fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'prompt_delete', ts: Date.now()/1000, id })+'\n','utf-8');
+    res.json({ ok:true });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+app.get('/api/prompts/:id/versions', (req,res)=>{
+  try{
+    const { id } = req.params;
+    const db = loadPromptsDb();
+    const prompt = db[id];
+    if(!prompt) return res.status(404).json({ error:'not found' });
+    res.json({ versions: prompt.versions||[] });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+app.post('/api/prompts/rollback', (req,res)=>{
+  try{
+    const { id, versionIdx } = req.body||{};
+    if(!id || versionIdx===undefined) return res.status(400).json({ error:'missing params' });
+    const db = loadPromptsDb();
+    const prompt = db[id];
+    if(!prompt) return res.status(404).json({ error:'not found' });
+    const versions = prompt.versions||[];
+    if(versionIdx >= versions.length) return res.status(400).json({ error:'invalid version' });
+    const target = versions[versionIdx];
+    prompt.body = target.body;
+    prompt.title = target.title;
+    prompt.version = (prompt.version||1)+1;
+    savePromptsDb(db);
+    res.json({ ok:true });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+app.post('/api/prompts/save-chain', (req,res)=>{
+  try{
+    const { name, steps } = req.body||{};
+    if(!name) return res.status(400).json({ error:'missing name' });
+    const chainFile = path.join(runtimeDir, 'chains.json');
+    const chains = fs.existsSync(chainFile)? JSON.parse(fs.readFileSync(chainFile,'utf-8')||'[]') : [];
+    const id = Math.random().toString(16).slice(2,10);
+    chains.push({ id, name, steps, ts: Date.now()/1000 });
+    fs.writeFileSync(chainFile, JSON.stringify(chains,null,2),'utf-8');
+    res.json({ ok:true, id });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+app.post('/api/prompts/run-chain', async (req,res)=>{
+  try{
+    const { steps } = req.body||{};
+    if(!Array.isArray(steps)) return res.status(400).json({ error:'invalid steps' });
+    const outputs = [];
+    for(let i=0; i<steps.length; i++){
+      const step = steps[i];
+      let body = step.body||'';
+      // Simple variable passthrough: {{step0.output}}, {{step1.output}}
+      for(let j=0; j<i; j++){
+        body = body.replace(new RegExp(`{{step${j}\\.output}}`, 'g'), outputs[j]||'');
+      }
+      const out = `[chain step ${i+1}] ${body.slice(0,100)}`;
+      outputs.push(out);
+      // Check condition if exists
+      if(step.condition){
+        const cond = step.condition.toLowerCase();
+        if(cond.includes('error') && !out.toLowerCase().includes('error')){
+          break; // Stop if condition not met
+        }
+      }
+    }
+    fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'chain_run', ts: Date.now()/1000, steps: steps.length, outputs })+'\n','utf-8');
+    res.json({ ok:true, outputs });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+app.post('/api/prompts/import', (req,res)=>{
+  try{
+    const { prompts } = req.body||{};
+    if(!Array.isArray(prompts)) return res.status(400).json({ error:'invalid format' });
+    const db = loadPromptsDb();
+    let count = 0;
+    for(const p of prompts){
+      const id = Math.random().toString(16).slice(2,10);
+      db[id] = { id, title: p.title||'Untitled', body: p.body||'', tags: p.tags||[], model: p.model||'router', notes: p.notes||'', ts: Date.now()/1000, version: 1 };
+      count++;
+    }
+    savePromptsDb(db);
+    res.json({ ok:true, count });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+app.get('/api/prompts/metrics', (_req,res)=>{
+  try{
+    const lines = fs.existsSync(promptLogFile)? fs.readFileSync(promptLogFile,'utf-8').trim().split('\n').filter(Boolean).map(l=>JSON.parse(l)) : [];
+    const runs = lines.filter(l=>l.kind==='prompt_run'||l.kind==='chain_run');
+    const avgLatency = 50; // stub
+    const successRate = 0.95; // stub
+    res.json({ totalRuns: runs.length, successRate, avgLatency });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
 
 const server = app.listen(PORT, () => {
   if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
