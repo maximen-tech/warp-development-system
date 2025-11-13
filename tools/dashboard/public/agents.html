@@ -71,7 +71,11 @@
           <button class="pill" id="loadDiff">Load diff</button>
           <button class="pill" id="doRollback">Rollback</button>
         </div>
-        <pre id="diffOut" class="small" style="white-space:pre-wrap;max-height:50vh;overflow:auto"></pre>
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:8px">
+          <div class="card"><div class="small">Before</div><pre id="diffBefore" class="small" style="white-space:pre-wrap;max-height:40vh;overflow:auto"></pre></div>
+          <div class="card"><div class="small">After</div><pre id="diffAfter" class="small" style="white-space:pre-wrap;max-height:40vh;overflow:auto"></pre></div>
+        </div>
+        <pre id="diffOut" class="small" style="white-space:pre-wrap;max-height:30vh;overflow:auto"></pre>
       </div>
     </div>
 
@@ -409,7 +413,7 @@
       qs('#reloadAgents').onclick = async ()=>{ await fetch('/api/agents/reload',{ method:'POST' }); alert('Reload event sent'); };
       qs('#historyBtn').onclick = async ()=>{ const h = await (await fetch('/api/agents/history')).json(); alert((h.backups||[]).map(b=>`${new Date(b.ts).toLocaleString()} · ${b.name}`).join('\n')||'No backups'); };
       qs('#historyUI').onclick = async ()=>{ openModal('#diffModal'); try{ const h = await (await fetch('/api/agents/history')).json(); const sel = qs('#backupSelect'); sel.innerHTML=''; for(const b of (h.backups||[])){ const o=document.createElement('option'); o.value=b.name; o.textContent = `${new Date(b.ts).toLocaleString()} · ${b.name}`; sel.appendChild(o); } }catch{} };
-      qs('#loadDiff').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; const d = await (await fetch(`/api/agents/diff?name=${encodeURIComponent(name)}`)).json(); qs('#diffOut').textContent = (d.agentsDiff||'') + (d.skillsDiff? ('\n'+d.skillsDiff) : ''); };
+      qs('#loadDiff').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; const d = await (await fetch(`/api/agents/diff?name=${encodeURIComponent(name)}`)).json(); qs('#diffOut').textContent = (d.agentsDiff||'') + (d.skillsDiff? ('\n'+d.skillsDiff) : ''); const txt = await (await fetch(`/api/agents/backup-content?name=${encodeURIComponent(name)}`)).text(); const isAgents = name.startsWith('agents'); const curAgents = isAgents ? (await (await fetch('/api/agents')).json()).agents : ''; const curSkills = isAgents ? '' : (await (await fetch('/api/agents')).json()).skills; qs('#diffBefore').textContent = txt; qs('#diffAfter').textContent = isAgents? curAgents : curSkills; };
       qs('#doRollback').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; if(!confirm('Rollback to '+name+'?')) return; await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names:[name] }) }); closeModal('#diffModal'); await loadAll(); };
       qs('#exportAgents').onclick = async ()=>{ const j = await (await fetch('/api/agents/export?format=json')).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_export.json'; a.click(); };
       qs('#bulkExportJson').onclick = async ()=>{
@@ -455,6 +459,12 @@
 
       loadAll();
       const _render = render; render = function(){ const prev = S.filter; S.filter = document.getElementById('search').value; const role = document.getElementById('roleFilter')?.value||''; const health = document.getElementById('healthFilter')?.value||''; const orig = S.agents.slice(); _render(); Array.from(document.querySelectorAll('#agentCards .card')).forEach(card=>{ const name = card.dataset.name; const a = orig.find(x=>x.name===name); let show = true; if(role && a?.role!==role) show=false; const st = S.status[name]||{}; if(health==='healthy' && !st.healthy) show=false; if(health==='stale' && st.healthy) show=false; card.style.display = show? '':'none'; }); S.filter = prev; };
+
+      // Hotkeys: undo/redo
+      document.addEventListener('keydown', async (e)=>{
+        if(e.ctrlKey && (e.key==='z' || e.key==='Z')){ e.preventDefault(); try{ const r = await (await fetch('/api/agents/undo',{ method:'POST' })).json(); if(r.ok) await loadAll(); }catch{} }
+        if(e.ctrlKey && (e.key==='y' || e.key==='Y')){ e.preventDefault(); try{ const r = await (await fetch('/api/agents/redo',{ method:'POST' })).json(); if(r.ok) await loadAll(); }catch{} }
+      });
 
       loadAll();
     </script>

@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3030;
 const runtimeDir = path.resolve(__dirname, '../../runtime');
 const eventsFile = path.join(runtimeDir, 'events.jsonl');
 const changeLogFile = path.join(runtimeDir, 'agents_changes.jsonl');
+const versionPtrFile = path.join(runtimeDir, 'agents_version.txt');
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '1mb' }));
@@ -346,8 +347,23 @@ app.get('/api/agents/history', (_req, res) => {
   try {
     if (!fs.existsSync(backupDir)) return res.json({ backups: [] });
     const files = fs.readdirSync(backupDir).filter(f=>/^(agents|skills)\.\d+\.yml$/.test(f)).map(name=>({ name, ts: parseInt(name.split('.')[1],10), kind: name.startsWith('agents')?'agents':'skills' }));
-    res.json({ backups: files.sort((a,b)=>b.ts-a.ts).slice(0,100) });
+    res.json({ backups: files.sort((a,b)=>b.ts-a.ts).slice(0,200) });
   } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+// Versions pointer + undo/redo
+function listBackups(){ if (!fs.existsSync(backupDir)) return []; return fs.readdirSync(backupDir).filter(f=>/^(agents|skills)\.\d+\.yml$/.test(f)).map(name=>({ name, ts: parseInt(name.split('.')[1],10), kind: name.startsWith('agents')?'agents':'skills' })).sort((a,b)=>a.ts-b.ts); }
+app.get('/api/agents/versions', (_req,res)=>{
+  try { const backups = listBackups(); const ptr = fs.existsSync(versionPtrFile) ? fs.readFileSync(versionPtrFile,'utf-8').trim() : (backups.length? backups[backups.length-1].name : null); res.json({ backups, pointer: ptr }); } catch(e){ res.status(500).json({ error:String(e) }); }
+});
+function applyBackupByName(name){ const src = path.join(backupDir, name); if(!fs.existsSync(src)) return false; if(name.startsWith('agents')) fs.copyFileSync(src, agentsFile); else if(name.startsWith('skills')) fs.copyFileSync(src, skillsFile); return true; }
+app.post('/api/agents/undo', (req,res)=>{
+  try{ const backups = listBackups(); if(!backups.length) return res.json({ ok:false, error:'no backups' }); const cur = fs.existsSync(versionPtrFile) ? fs.readFileSync(versionPtrFile,'utf-8').trim() : backups[backups.length-1].name; const idx = Math.max(0, backups.findIndex(b=>b.name===cur)-1); const name = backups[idx].name; if(!applyBackupByName(name)) return res.json({ ok:false }); fs.writeFileSync(versionPtrFile, name, 'utf-8'); logChange('undo',{ to:name }); res.json({ ok:true, to:name }); } catch(e){ res.status(500).json({ error:String(e) }); }
+});
+app.post('/api/agents/redo', (req,res)=>{
+  try{ const backups = listBackups(); if(!backups.length) return res.json({ ok:false, error:'no backups' }); const cur = fs.existsSync(versionPtrFile) ? fs.readFileSync(versionPtrFile,'utf-8').trim() : backups[backups.length-1].name; const idx = Math.min(backups.length-1, backups.findIndex(b=>b.name===cur)+1); const name = backups[idx].name; if(!applyBackupByName(name)) return res.json({ ok:false }); fs.writeFileSync(versionPtrFile, name, 'utf-8'); logChange('redo',{ to:name }); res.json({ ok:true, to:name }); } catch(e){ res.status(500).json({ error:String(e) }); }
+});
+app.get('/api/agents/backup-content', (req,res)=>{
+  try{ const name = (req.query.name||'').trim(); if(!name) return res.status(400).end(); const p = path.join(backupDir, name); if(!fs.existsSync(p)) return res.status(404).end(); res.setHeader('Content-Type','text/plain'); res.send(fs.readFileSync(p,'utf-8')); } catch(e){ res.status(500).json({ error:String(e) }); }
 });
 app.post('/api/agents/rollback', async (req, res) => {
   try {
@@ -362,6 +378,31 @@ app.post('/api/agents/rollback', async (req, res) => {
     res.json({ ok:true });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
+// Agent-specific KPI aggregation
+app.get('/api/agents/kpi', (req,res)=>{
+  try{
+    const agent = (req.query.agent||'').trim(); if(!agent) return res.status(400).json({ error:'missing agent' });
+    const windowSec = (req.query.window? parseInt(req.query.window,10) : 3600) || 3600;
+    if (!fs.existsSync(eventsFile)) return res.json({ agent, metrics:{} });
+    const nowSec = Date.now()/1000; const since = nowSec - windowSec;
+    const lines = fs.readFileSync(eventsFile,'utf-8').trim().split('\n').filter(Boolean);
+    const evs = [];
+    for(const line of lines){ try{ const ev = JSON.parse(line); if((ev.agent||'')===agent && typeof ev.ts==='number' && ev.ts>=since) evs.push(ev); }catch{} }
+    // metrics
+    let calls=0, errors=0; let latList=[]; const waits=[]; const buckets = new Array(Math.max(1, Math.floor(windowSec/60))).fill(0);
+    const reqQ = [];
+    for(const ev of evs){ const dt = Math.floor((nowSec - (ev.ts||nowSec))/60); if(dt>=0 && dt<buckets.length) buckets[buckets.length-1-dt]++; if(ev.kind==='agent_request') reqQ.push(ev.ts); if(ev.kind==='agent_response'){ const start = reqQ.shift(); if(typeof start==='number'){ latList.push((ev.ts-start)*1000); calls++; } }
+      if(ev.status==='error') errors++; }
+    // approval waits
+    const approvals = evs.filter(e=> e.kind==='approval_granted');
+    const actionsManual = evs.filter(e=> e.kind==='action_proposed' && ((e.data&&e.data.approval)==='manual'));
+    for(const a of actionsManual){ const aid = (a.data&&a.data.actionId)||null; const m = approvals.find(x=> { const xid=(x.data&&x.data.actionId)||null; return aid? (xid===aid):true; }); if(m && m.ts>=a.ts) waits.push(m.ts-a.ts); }
+    const median = (arr)=>{ if(!arr.length) return 0; const s=[...arr].sort((x,y)=>x-y); const m=Math.floor(s.length/2); return s.length%2? s[m] : (s[m-1]+s[m])/2; };
+    const successRate = calls? (1 - (errors/calls)) : 0;
+    res.json({ agent, metrics:{ calls, errors, avgLatencyMs: latList.length? (latList.reduce((a,b)=>a+b,0)/latList.length) : 0, medianTimeToApprovalSec: median(waits), successRate, sparklinePerMin: buckets } });
+  } catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
 app.get('/api/agents/status', async (req, res) => {
   try {
     const windowSec = (req.query.window? parseInt(req.query.window,10) : 3600) || 3600;
