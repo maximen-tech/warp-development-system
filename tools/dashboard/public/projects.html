@@ -4,6 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Projects Hub - Warp Platform</title>
+  <!-- Design System CSS (Phase 6) -->
+  <link rel="stylesheet" href="/css/design-system.css" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/animations.css" />
+  <link rel="stylesheet" href="/css/responsive.css" />
+  <!-- Legacy Styles -->
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/dashboard-pro.css" />
   <link rel="stylesheet" href="/projects.css" />
@@ -55,18 +62,20 @@
       </div>
     </section>
     
-    <section class="projects-stats" aria-label="Projects Stats">
-      <div class="stat-card">
-        <div class="stat-card__label">Total Projects</div>
-        <div class="stat-card__value" id="projectsCount">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card__label">Active</div>
-        <div class="stat-card__value" id="activeCount">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card__label">Avg Optimization</div>
-        <div class="stat-card__value" id="avgOptimization">0%</div>
+    <section class="projects-stats section" aria-label="Projects Stats">
+      <div class="grid kpi-grid gap-md">
+        <div class="kpi-card">
+          <div class="kpi-card__label">Total Projects</div>
+          <div class="kpi-card__value" id="projectsCount">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">Active</div>
+          <div class="kpi-card__value" id="activeCount">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">Avg Optimization</div>
+          <div class="kpi-card__value" id="avgOptimization">0%</div>
+        </div>
       </div>
     </section>
     
