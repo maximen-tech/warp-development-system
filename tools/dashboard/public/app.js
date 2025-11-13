@@ -56,7 +56,27 @@ async function loadArtifacts(){
     const meta = await (await fetch('/api/artifacts')).json();
     const items = meta.files||[];
     if(!items.length){ list.innerHTML = '<div class="small">No artifacts yet</div>'; return; }
-    list.innerHTML = items.map(f=>`<div class="row" style="justify-content:space-between;"><span>${f.name}</span><span class="small">${(f.size||0)} bytes</span><a class="pill" href="/api/artifact/download/${f.name}">Download</a></div>`).join('');
+    list.innerHTML = '';
+    for(const f of items){
+      const row = document.createElement('div'); row.className='row'; row.style.justifyContent='space-between';
+      row.innerHTML = `<span>${f.name}</span><span class="small">${(f.size||0)} bytes</span>`;
+      const actions = document.createElement('span'); actions.className='row';
+      const btnPreview = document.createElement('button'); btnPreview.className='pill'; btnPreview.textContent='Preview';
+      const btnCopy = document.createElement('button'); btnCopy.className='pill'; btnCopy.textContent='Copy';
+      const btnOpen = document.createElement('a'); btnOpen.className='pill'; btnOpen.textContent='Open'; btnOpen.href=`/api/artifact/download/${f.name}`; btnOpen.target='_blank';
+      actions.appendChild(btnPreview); actions.appendChild(btnCopy); actions.appendChild(btnOpen);
+      row.appendChild(actions); list.appendChild(row);
+      btnPreview.onclick = async ()=>{
+        const text = await (await fetch(`/api/artifact/raw/${f.name}`)).text();
+        const container = document.createElement('div'); container.className='card';
+        const code = document.createElement('code');
+        let lang = 'markup'; if(f.name.endsWith('.json')) lang='json'; else if(f.name.endsWith('.diff')) lang='diff'; else if(f.name.endsWith('.md')){ const marked = (await import('https://cdn.jsdelivr.net/npm/marked/+esm')).marked; container.innerHTML = marked.parse(text); list.appendChild(container); return; } else if(f.name.endsWith('.log')||f.name.endsWith('.txt')) lang='markup';
+        const pre = document.createElement('pre'); pre.className=`language-${lang}`; code.className=`language-${lang}`; code.textContent=text; pre.appendChild(code); container.appendChild(pre); list.appendChild(container); if(window.Prism) Prism.highlightElement(code);
+      };
+      btnCopy.onclick = async ()=>{
+        const text = await (await fetch(`/api/artifact/raw/${f.name}`)).text(); await navigator.clipboard.writeText(text);
+      };
+    }
   } catch {}
 }
 

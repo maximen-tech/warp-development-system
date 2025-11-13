@@ -128,10 +128,17 @@ app.get('/api/artifact/plan', (_req, res) => {
 app.get('/api/artifacts', (_req, res) => {
   try {
     const result = [];
-    const planPath = path.join(runtimeDir, 'plan.md');
-    if (fs.existsSync(planPath)) {
-      const st = fs.statSync(planPath);
-      result.push({ name: 'plan.md', size: st.size, mtime: st.mtimeMs });
+    if (fs.existsSync(runtimeDir)) {
+      const allowed = new Set(['.md', '.json', '.txt', '.diff', '.log']);
+      for (const name of fs.readdirSync(runtimeDir)) {
+        const ext = path.extname(name).toLowerCase();
+        if (!allowed.has(ext)) continue;
+        const p = path.join(runtimeDir, name);
+        if (fs.statSync(p).isFile()) {
+          const st = fs.statSync(p);
+          result.push({ name, size: st.size, mtime: st.mtimeMs });
+        }
+      }
     }
     res.json({ files: result });
   } catch (e) {
@@ -139,13 +146,20 @@ app.get('/api/artifacts', (_req, res) => {
   }
 });
 app.get('/api/artifact/download/:name', (req, res) => {
-  const allowed = new Set(['plan.md']);
   const name = req.params.name;
-  if (!allowed.has(name)) return res.status(404).end();
   const p = path.join(runtimeDir, name);
   if (!fs.existsSync(p)) return res.status(404).end();
   res.setHeader('Content-Type', 'text/plain');
   fs.createReadStream(p).pipe(res);
+});
+app.get('/api/artifact/raw/:name', (req, res) => {
+  try {
+    const name = req.params.name;
+    const p = path.join(runtimeDir, name);
+    if (!fs.existsSync(p)) return res.status(404).end();
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(fs.readFileSync(p, 'utf-8'));
+  } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
 // Run E2E scenarios from UI (best-effort)
@@ -187,21 +201,51 @@ app.get('/api/runs/segments', (_req, res) => {
     res.json({ runs });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
+function exportRunSlice(idx){
+  if (!fs.existsSync(eventsFile)) return null;
+  const lines = fs.readFileSync(eventsFile, 'utf-8').trim().split('\n').filter(Boolean);
+  let cur = -1; let start=-1; let end=-1;
+  for (let i=0;i<lines.length;i++){
+    const ev = JSON.parse(lines[i]);
+    if (ev.kind==='start'){ cur++; if (cur===idx) start=i; }
+    if (ev.kind==='end' && cur===idx){ end=i; break; }
+  }
+  if (start===-1) return null;
+  return lines.slice(start, end===-1? lines.length : end+1);
+}
 app.get('/api/runs/export/:idx', (req, res) => {
   try {
     const idx = parseInt(req.params.idx, 10);
-    if (!fs.existsSync(eventsFile)) return res.status(404).end();
-    const lines = fs.readFileSync(eventsFile, 'utf-8').trim().split('\n').filter(Boolean);
-    let cur = -1; let start=-1; let end=-1;
-    for (let i=0;i<lines.length;i++){
-      const ev = JSON.parse(lines[i]);
-      if (ev.kind==='start'){ cur++; if (cur===idx) start=i; }
-      if (ev.kind==='end' && cur===idx){ end=i; break; }
-    }
-    if (start===-1) return res.status(404).end();
-    const slice = lines.slice(start, end===-1? lines.length : end+1).join('\n');
+    const slice = exportRunSlice(idx);
+    if (!slice) return res.status(404).end();
     res.setHeader('Content-Type', 'text/plain');
-    res.send(slice);
+    res.send(slice.join('\n'));
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+app.post('/api/runs/replay/:idx', (req, res) => {
+  try {
+    const idx = parseInt(req.params.idx, 10);
+    const slice = exportRunSlice(idx);
+    if (!slice) return res.status(404).json({ error: 'not found' });
+    const goal = (req.body||{}).goal || undefined;
+    const constraints = (req.body||{}).constraints || undefined;
+    const newRun = (Math.random().toString(16).slice(2,10));
+    const now = Date.now()/1000;
+    const out = [];
+    for (let j=0;j<slice.length;j++){
+      const ev = JSON.parse(slice[j]);
+      ev.ts = now + j*0.01;
+      ev.data = ev.data || {};
+      ev.data.runId = newRun;
+      if (j===0 && ev.kind==='start'){
+        ev.data.replayOf = (ev.data && ev.data.runId) || 'unknown';
+        if (goal) ev.data.goal = goal;
+        if (constraints) ev.data.constraints = constraints;
+      }
+      out.push(JSON.stringify(ev));
+    }
+    fs.appendFileSync(eventsFile, out.join('\n')+'\n', 'utf-8');
+    res.json({ ok: true, runId: newRun });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
