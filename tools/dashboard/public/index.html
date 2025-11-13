@@ -18,6 +18,8 @@
     <script src="/notifications.js"></script>
     <script src="/collab.js"></script>
     <script src="/context-switcher.js"></script>
+    <script src="/history-panel.js"></script>
+    <link rel="stylesheet" href="/history-panel.css" />
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-core.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-diff.min.js"></script>
@@ -242,6 +244,14 @@
         } catch {}
       }
       previewPlan();
+      
+      // Initialize terminal + history panels
+      if (typeof initTerminalPanel !== 'undefined') {
+        initTerminalPanel();
+      }
+      if (typeof initHistoryPanel !== 'undefined') {
+        initHistoryPanel();
+      }
     </script>
   </body>
 </html>

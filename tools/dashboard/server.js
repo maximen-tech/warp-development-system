@@ -7,6 +7,7 @@ import { execSync } from 'child_process';
 import { scaffoldProject, getAvailableTemplates } from './lib/scaffolder.js';
 import { analyzeCodebase } from './lib/analyzer.js';
 import { optimizeProject } from './lib/optimizer.js';
+import CodeWatcher from './lib/code-watcher.js';
 import { spawn } from 'child_process';
 import { WebSocketServer } from 'ws';
 
@@ -1176,6 +1177,56 @@ app.put('/api/projects/:id/optimize', async (req, res) => {
     saveProjects(projects);
     res.json({ success: true, project });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Code History Watcher
+const CODE_HISTORY_DIR = path.join(runtimeDir, 'projects_code_history');
+const codeWatcher = new CodeWatcher(CODE_HISTORY_DIR);
+
+app.post('/api/code-history/watch', async (req, res) => {
+  try {
+    const { projectId, projectPath } = req.body;
+    if (!projectId || !projectPath) return res.status(400).json({ error: 'Missing projectId or projectPath' });
+    
+    await codeWatcher.startWatching(projectId, projectPath);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/code-history/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const limit = parseInt(req.query.limit || '5');
+    
+    const changes = await codeWatcher.getRecentChanges(projectId, limit);
+    res.json({ changes });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/code-history/:projectId/all', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const page = parseInt(req.query.page || '1');
+    const limit = parseInt(req.query.limit || '20');
+    
+    const result = await codeWatcher.getAllChanges(projectId, page, limit);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/code-history/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    await codeWatcher.clearHistory(projectId);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Auto-start watching active project
+process.on('SIGINT', async () => {
+  console.log('\n[dashboard] Shutting down...');
+  await codeWatcher.stopAll();
+  process.exit(0);
 });
 
 const server = app.listen(PORT, () => {
