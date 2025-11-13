@@ -1,6 +1,11 @@
-const fs = require('fs').promises;
-const path = require('path');
-const EventEmitter = require('events');
+import fs from 'fs/promises';
+import path from 'path';
+import { EventEmitter } from 'events';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 class AgentOrchestrator extends EventEmitter {
   constructor() {
@@ -305,4 +310,4 @@ class AgentOrchestrator extends EventEmitter {
   }
 }
 
-module.exports = AgentOrchestrator;
+export default AgentOrchestrator;

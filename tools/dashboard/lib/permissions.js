@@ -1,5 +1,10 @@
-const fs = require('fs').promises;
-const path = require('path');
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 class PermissionsManager {
   constructor() {
@@ -94,4 +99,4 @@ class PermissionsManager {
   }
 }
 
-module.exports = PermissionsManager;
+export default PermissionsManager;

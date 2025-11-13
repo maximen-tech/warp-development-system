@@ -1,5 +1,5 @@
-const EventEmitter = require('events');
-const crypto = require('crypto');
+import { EventEmitter } from 'events';
+import crypto from 'crypto';
 
 class WebhookManager extends EventEmitter {
   constructor() {
@@ -115,4 +115,4 @@ class WebhookManager extends EventEmitter {
   }
 }
 
-module.exports = WebhookManager;
+export default WebhookManager;

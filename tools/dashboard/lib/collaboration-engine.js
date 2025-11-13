@@ -1,4 +1,4 @@
-const EventEmitter = require('events');
+import { EventEmitter } from 'events';
 
 class CollaborationEngine extends EventEmitter {
   constructor() {
@@ -102,4 +102,4 @@ class CollaborationEngine extends EventEmitter {
   }
 }
 
-module.exports = CollaborationEngine;
+export default CollaborationEngine;
