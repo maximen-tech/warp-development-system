@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prompt Factory</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <a class="pill" href="/">← Back</a>
+      <strong>Prompt Factory</strong>
+      <a class="pill" href="/api/prompts/export?format=json" target="_blank">Export JSON</a>
+      <a class="pill" href="/api/prompts/export?format=csv" target="_blank">Export CSV</a>
+    </header>
+    <div class="wrap">
+      <div class="grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="card">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <span>Editor</span>
+            <button id="save" class="pill">Save</button>
+          </div>
+          <div class="kv"><label class="small">Title</label><div><input id="title" class="pill"/></div></div>
+          <div class="kv"><label class="small">Tags</label><div><input id="tags" class="pill" placeholder="comma,separated"/></div></div>
+          <div class="kv"><label class="small">Notes</label><div><input id="notes" class="pill"/></div></div>
+          <div class="kv"><label class="small">Model</label><div><input id="model" class="pill" placeholder="router/claude/gpt..."/></div></div>
+          <div class="kv"><label class="small">Prompt</label><div><textarea id="body" rows="10" style="width:100%"></textarea></div></div>
+          <div class="kv"><label class="small">Optimization idea</label><div><input id="opt" class="pill" placeholder="What to improve"/></div></div>
+          <div class="row" style="gap:8px;justify-content:flex-end"><button id="run" class="pill">Generate response</button></div>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between;align-items:center"><span>Response</span></div>
+          <pre id="out" class="small" style="white-space:pre-wrap;max-height:60vh;overflow:auto"></pre>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:center"><span>History</span><button id="refresh" class="pill">Refresh</button></div>
+        <div id="hist" class="small" style="max-height:240px;overflow:auto"></div>
+      </div>
+    </div>
+    <script>
+      async function refresh(){ const j = await (await fetch('/api/prompts')).json(); const hist = document.getElementById('hist'); hist.innerHTML=''; for(const e of (j.entries||[]).slice().reverse()){ const row = document.createElement('div'); row.className='row'; row.style.justifyContent='space-between'; row.innerHTML = `<span>${new Date((e.ts||0)*1000).toLocaleString()} · ${e.kind} · ${(e.title||'')}</span>`; hist.appendChild(row); } }
+      document.getElementById('refresh').onclick = refresh;
+      document.getElementById('save').onclick = async ()=>{ const title = titleEl.value.trim(); const body = bodyEl.value; const tags = (document.getElementById('tags').value||'').split(',').map(s=>s.trim()).filter(Boolean); const notes = document.getElementById('notes').value||''; await fetch('/api/prompts/save',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, body, tags, notes }) }); refresh(); };
+      const titleEl = document.getElementById('title'); const bodyEl = document.getElementById('body');
+      document.getElementById('run').onclick = async ()=>{ const body = bodyEl.value; const model = document.getElementById('model').value||'router'; const optimizeIdea = document.getElementById('opt').value||''; const j = await (await fetch('/api/prompts/run',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ body, model, optimizeIdea }) })).json(); document.getElementById('out').textContent = j.output||''; refresh(); };
+      refresh();
+    </script>
+  </body>
+</html>

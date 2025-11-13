@@ -162,10 +162,22 @@ async function pollConsole(){ if(consolePaused) return; try{ const d = await (aw
 }
 function initConsole(){ const pauseBtn = document.getElementById('pauseConsole'); const clearBtn = document.getElementById('clearConsole'); if(pauseBtn){ pauseBtn.onclick = ()=>{ consolePaused = !consolePaused; pauseBtn.textContent = consolePaused ? 'Resume' : 'Pause'; }; } if(clearBtn){ clearBtn.onclick = async ()=>{ await fetch('/api/clear-console',{method:'POST'}); lastConsole=''; pollConsole(); }; } consoleTimer = setInterval(pollConsole, 2000); }
 
+function initTerminal(){
+  const termOut = document.getElementById('termOut'); if(!termOut) return;
+  const src = new EventSource('/terminal-stream');
+  src.onmessage = (e)=>{ try{ const ev = JSON.parse(e.data); if(ev.kind==='term'||ev.kind==='term_start'||ev.kind==='term_end'){ termOut.textContent += (ev.data||ev.cmd||`[code ${ev.code}]`); termOut.scrollTop = termOut.scrollHeight; } }catch{} };
+  document.getElementById('termClear').onclick = async ()=>{ await fetch('/api/terminal/clear',{ method:'POST' }); termOut.textContent=''; };
+  async function refreshFavs(){ try{ const j = await (await fetch('/api/terminal/favorites')).json(); const sel = document.getElementById('termFavs'); sel.innerHTML = '<option value="">Favorites</option>' + (j.favorites||[]).map(x=>`<option>${x}</option>`).join(''); sel.onchange = ()=>{ const v = sel.value; if(v) document.getElementById('termInput').value = v; }; } catch{} }
+  document.getElementById('termFavSave').onclick = async ()=>{ const v = document.getElementById('termInput').value.trim(); if(!v) return; const j = await (await fetch('/api/terminal/favorites')).json(); const favs = j.favorites||[]; if(!favs.includes(v)) favs.push(v); await fetch('/api/terminal/favorites',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ favorites: favs })}); refreshFavs(); };
+  document.getElementById('termRun').onclick = async ()=>{ const cmd = document.getElementById('termInput').value.trim(); if(!cmd) return; await fetch('/api/terminal/exec',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cmd }) }); };
+  refreshFavs();
+}
+
 export function initDashboard(){
   updateOverview();
   loadArtifacts();
   initConsole();
+  initTerminal();
   initKPIControls();
   const source = new EventSource('/events');
   source.onmessage = (e)=>{

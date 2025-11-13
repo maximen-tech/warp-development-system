@@ -784,6 +784,44 @@ app.get('/agents-changes', (req,res)=>{
   req.on('close', ()=>{ watcher.close().catch(()=>{}); res.end(); });
 });
 
+// Remote terminal (JSONL + SSE)
+const termLogFile = path.join(runtimeDir, 'terminal.jsonl');
+app.get('/terminal-stream', (req,res)=>{
+  res.setHeader('Content-Type','text/event-stream'); res.setHeader('Cache-Control','no-cache'); res.setHeader('Connection','keep-alive'); res.flushHeaders();
+  try{ if(fs.existsSync(termLogFile)){ const lines = fs.readFileSync(termLogFile,'utf-8').trim().split('\n').slice(-200); for(const l of lines){ res.write(`data: ${l}\n\n`);} } }catch{}
+  const watcher = chokidar.watch(termLogFile,{ persistent:true, ignoreInitial:true });
+  watcher.on('change', ()=>{ try{ const content = fs.readFileSync(termLogFile,'utf-8').trim().split('\n'); const tail = content.slice(-50); for(const l of tail) res.write(`data: ${l}\n\n`); }catch{} });
+  req.on('close', ()=>{ watcher.close().catch(()=>{}); res.end(); });
+});
+app.get('/api/terminal/history', (_req,res)=>{ try{ const lines = fs.existsSync(termLogFile)? fs.readFileSync(termLogFile,'utf-8').trim().split('\n').filter(Boolean).slice(-500).map(l=>JSON.parse(l)) : []; res.json({ entries: lines }); } catch(e){ res.status(500).json({ error:String(e) }); } });
+app.post('/api/terminal/clear', (_req,res)=>{ try{ fs.writeFileSync(termLogFile,'','utf-8'); res.json({ ok:true }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+const termFavFile = path.join(runtimeDir, 'terminal_favorites.json');
+app.get('/api/terminal/favorites', (_req,res)=>{ try{ const j = fs.existsSync(termFavFile)? JSON.parse(fs.readFileSync(termFavFile,'utf-8')||'[]') : []; res.json({ favorites:j }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+app.post('/api/terminal/favorites', (req,res)=>{ try{ const favs = Array.isArray((req.body||{}).favorites)? (req.body||{}).favorites : []; fs.writeFileSync(termFavFile, JSON.stringify(favs,null,2),'utf-8'); res.json({ ok:true }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+app.post('/api/terminal/exec', (req,res)=>{
+  try{
+    const { cmd, cwd, env } = req.body||{}; if(!cmd) return res.status(400).json({ error:'missing cmd' });
+    const shell = process.platform==='win32' ? 'pwsh' : 'bash';
+    const args = process.platform==='win32' ? ['-NoLogo','-NoProfile','-Command', cmd] : ['-lc', cmd];
+    const child = spawn(shell, args, { cwd: cwd||repoRoot, env: { ...process.env, ...(env||{}) } });
+    const append = (obj)=>{ const line = JSON.stringify({ ts: Date.now()/1000, ...obj }); fs.appendFileSync(termLogFile, line+'\n','utf-8'); };
+    append({ kind:'term_start', cmd });
+    child.stdout.on('data', d=> append({ kind:'term', stream:'stdout', data: String(d) }));
+    child.stderr.on('data', d=> append({ kind:'term', stream:'stderr', data: String(d) }));
+    child.on('close', code=> append({ kind:'term_end', code }));
+    // audit to events as well
+    fs.appendFileSync(eventsFile, JSON.stringify({ ts: Date.now()/1000, kind:'terminal_exec', status:'ok', data:{ cmd }})+'\n','utf-8');
+    res.json({ ok:true });
+  }catch(e){ res.status(500).json({ error:String(e) }); }
+});
+
+// Prompt factory
+const promptLogFile = path.join(runtimeDir, 'prompts.jsonl');
+app.get('/api/prompts', (_req,res)=>{ try{ const lines = fs.existsSync(promptLogFile)? fs.readFileSync(promptLogFile,'utf-8').trim().split('\n').filter(Boolean).slice(-200).map(l=>JSON.parse(l)) : []; res.json({ entries: lines }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+app.post('/api/prompts/save', (req,res)=>{ try{ const { title, body, tags, notes } = req.body||{}; const id = Math.random().toString(16).slice(2,10); const rec = { ts: Date.now()/1000, id, title, body, tags: tags||[], notes: notes||'' }; fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'prompt_save', ...rec })+'\n','utf-8'); res.json({ ok:true, id }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+app.post('/api/prompts/run', (req,res)=>{ try{ const { id, body, model, optimizeIdea } = req.body||{}; const promptText = body||''; const out = `[stub:${model||'router'}] ${promptText.slice(0,200)}\nSuggestion: ${optimizeIdea||''}`; const now=Date.now()/1000; const evReq = { ts: now, kind:'agent_request', status:'ok', agent:'prompt_factory', data:{ model:model||'router', prompt: promptText.slice(0,200)} }; const evRes = { ts: now+0.05, kind:'agent_response', status:'ok', agent:'prompt_factory', data:{ output: out } }; fs.appendFileSync(eventsFile, JSON.stringify(evReq)+'\n','utf-8'); fs.appendFileSync(eventsFile, JSON.stringify(evRes)+'\n','utf-8'); fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'prompt_run', ts: now, id: id||null, body: promptText, model: model||null, optimizeIdea: optimizeIdea||null, output: out })+'\n','utf-8'); res.json({ ok:true, output: out }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+app.get('/api/prompts/export', (req,res)=>{ try{ const fmt=String(req.query.format||'json'); const lines = fs.existsSync(promptLogFile)? fs.readFileSync(promptLogFile,'utf-8').trim().split('\n').filter(Boolean).map(l=>JSON.parse(l)) : []; if(fmt==='csv'){ const rows=['ts,kind,id,title,tags']; for(const r of lines){ rows.push(`${r.ts||''},${r.kind||''},${r.id||''},"${(r.title||'').replace(/"/g,'\"')}","${(Array.isArray(r.tags)?r.tags.join('|'):'').replace(/"/g,'\"')}"`);} res.setHeader('Content-Type','text/csv'); return res.send(rows.join('\n')); } res.json({ entries: lines }); }catch(e){ res.status(500).json({ error:String(e) }); } });
+
 app.listen(PORT, () => {
   if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
   if (!fs.existsSync(eventsFile)) fs.writeFileSync(eventsFile, '', 'utf-8');

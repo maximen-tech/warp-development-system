@@ -66,18 +66,22 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
 - APIs
   - GET /api/artifacts, GET /api/artifact/plan, GET /api/artifact/download/:name, GET /api/artifact/raw/:name
   - POST /api/events/append (append custom event; e.g., approval_granted)
-  - GET /api/console, POST /api/clear-console
+- GET /api/console, POST /api/clear-console
+  - Terminal: GET /terminal-stream (SSE), POST /api/terminal/exec, GET/POST /api/terminal/favorites, GET /api/terminal/history, POST /api/terminal/clear
   - GET /api/runs/segments, GET /api/runs/export/:idx, POST /api/runs/replay/:idx
   - GET /api/agents, POST /api/agents/validate, PUT /api/agents
+  - Prompt factory: GET /api/prompts, POST /api/prompts/save, POST /api/prompts/run, GET /api/prompts/export?format=json|csv
   - GET /api/agents/list, POST /api/agents/save, POST /api/agents/validate-json
   - POST /api/agents/item (upsert), DELETE /api/agents/item (delete)
   - GET /api/agents/export?format=json|csv[&names=a,b], POST /api/agents/import {partial,dryRun}
-  - GET /api/agents/history, GET /api/agents/diff?name=..., POST /api/agents/rollback-group
+- GET /api/agents/history, GET /api/agents/diff?name=..., POST /api/agents/rollback-group
+  - GET /api/agents/versions, POST /api/agents/undo, POST /api/agents/redo, GET /api/agents/backup-content?name=...
   - GET /api/agents/status?window=..., GET /api/agents/logs?agent&limit
   - GET /api/agents/changelog, GET /api/agents/export-one?name&format=json|yaml
 - GET /api/skills, POST /api/skills/save, POST /api/skills/item, DELETE /api/skills/item
   - GET /api/skills/history, POST /api/skills/rollback, GET /api/skills/usage, GET /api/skills/export-one?name&format=yaml|json
   - POST /api/skills/import-url { url } (preview only)
+  - SSE: GET /agents-changes (stream of agents_changes.jsonl)
   - POST /api/connectors/test { type, config }
   - GET/POST /api/theme, GET/POST /api/approval-mode
   - GET /api/kpi?window=15m|1h|24h&runId=...&format=json|csv
@@ -92,11 +96,13 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
 - No-code CRUD for agents and skills; live validation and backups
 - Bulk operations: delete, duplicate, export/import (JSON/CSV via JSON conversion), diff & rollback
 - Approvals UI: required + autonomy (0–3), policy presets (Safe/Balanced/Autonomous) and advanced JSON fallback
-- Analytics mini-cards per agent (calls, errors, last activity, avg latency) + logs expand; status window configurable
+- Analytics mini-cards per agent (calls, errors, last activity, avg latency) + logs expand; status window configurable; per-agent KPI drawer with sparkline/export and run jump
 - Copy/export one agent/skill as JSON/YAML; history and diff before restore; changelog available
-- Onboarding wizard on empty state; search/filter by role/health; drag reorder persists
+- Onboarding wizard on empty state; search/filter by role/health; drag reorder persists; Terminal live card; Prompt Factory page
 
 ### KPIs and metrics
+- Per-agent KPI: GET /api/agents/kpi?agent=NAME&window=... (calls, errors, avgLatencyMs, medianTimeToApprovalSec, successRate, sparkline)
+- Global KPI: GET /api/kpi?window=15m|1h|24h&runId=...&format=json|csv
 - Controls: window selector (15m default, 1h, 24h) and run selector (All runs or a specific runId)
 - Exposed metrics (server-side aggregated from runtime/events.jsonl):
   - medianTimeToApprovalSec, maxApprovalWaitSec

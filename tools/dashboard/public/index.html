@@ -15,6 +15,7 @@
     <header>
 <strong>Warp Dashboard</strong>
       <a class="pill" href="/agents.html" style="text-decoration:none;">Agents</a>
+      <a class="pill" href="/prompts.html" style="text-decoration:none;">Prompts</a>
       <div class="controls">
         <span class="pill" id="toggle-await">Awaiting approvals</span>
         <span class="pill" id="toggle-errors">Errors</span>
@@ -75,6 +76,21 @@
             </div>
             <canvas id="sparkline" width="300" height="60"></canvas>
             <canvas id="heatmap" width="300" height="120" style="margin-top:8px"></canvas>
+          </div>
+          <div class="card">
+            <div class="row" style="justify-content:space-between;">
+              <span>Terminal live</span>
+              <div class="row">
+                <button class="pill" id="termClear">Clear</button>
+                <button class="pill" id="termFavSave">Save fav</button>
+              </div>
+            </div>
+            <div class="row" style="gap:8px">
+              <input id="termInput" class="pill" placeholder="Enter shell command" style="min-width:240px"/>
+              <button class="pill" id="termRun">Run</button>
+              <select id="termFavs" class="pill" style="min-width:160px"><option value="">Favorites</option></select>
+            </div>
+            <pre id="termOut" class="small" style="white-space:pre-wrap;max-height:160px;overflow:auto"></pre>
           </div>
           <div class="card">
             <div class="row" style="justify-content:space-between;">
