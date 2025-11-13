@@ -3,141 +3,373 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Warp Agents</title>
+    <title>Agents Control Panel</title>
+    <link rel="stylesheet" href="/styles.css" />
     <style>
-      body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #0b0f14; color: #e6edf3; }
-      header { padding: 12px 16px; background: #151b23; border-bottom: 1px solid #263040; display:flex; gap:12px; align-items:center; }
-      .wrap { padding: 16px; display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
-      textarea { width:100%; height: 60vh; background:#0b0f14; color:#e6edf3; border:1px solid #263040; border-radius:8px; padding:8px; }
-      .pill { padding:6px 10px; border:1px solid #263040; border-radius:999px; background:#0b0f14; color:#e6edf3; cursor:pointer; text-decoration:none; }
-      .event { padding:8px 12px; background:#11161d; border:1px solid #263040; border-radius:8px; margin-bottom:8px; }
-      .ts { color:#9fb3c8; font-size:12px; }
-      .ok { color:#27d980; } .err { color:#ff6b6b; } .info { color:#6ab7ff; } .warn { color:#ffc857; }
-      .controls { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
-      select, input { background:#0b0f14; color:#e6edf3; border:1px solid #263040; border-radius:6px; padding:6px; }
+      .tabs{display:flex;gap:8px;margin:12px 0}
+      .tab{padding:6px 10px;border:1px solid var(--border);border-radius:999px;cursor:pointer}
+      .tab.active{background:var(--info);color:#000;border-color:var(--info)}
+      .chips{display:flex;gap:6px;flex-wrap:wrap}
+      .chip{border:1px solid var(--border);padding:2px 6px;border-radius:999px}
+      .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
+      .modal .content{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;min-width:360px;max-width:720px}
+      .grid-cards{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}
+      .kv{display:grid;grid-template-columns:140px 1fr;gap:8px;align-items:center;margin:6px 0}
+      .kv input, .kv select, .kv textarea{width:100%}
+      @media(max-width:900px){ .grid-cards{grid-template-columns:1fr} }
     </style>
   </head>
   <body>
     <header>
       <a class="pill" href="/">← Back</a>
-      <strong>Agents</strong>
-      <span id="status"></span>
+      <strong>Agents & Skills</strong>
+      <span class="pill" id="reloadAgents">Reload</span>
+      <span class="pill" id="historyBtn">History</span>
+      <span class="pill" id="exportAgents">Export (YAML)</span>
     </header>
     <div class="wrap">
-      <div>
-        <div class="controls">
-          <button class="pill" id="refresh">Refresh</button>
-          <button class="pill" id="validate">Validate</button>
-          <button class="pill" id="save" disabled>Save</button>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="tabs">
+          <div class="tab active" data-tab="agents">Agents</div>
+          <div class="tab" data-tab="skills">Skills</div>
         </div>
-        <div class="controls">
-          <span>agents.yml</span>
-        </div>
-        <textarea id="agents"></textarea>
-        <div class="controls" style="margin-top:8px;">
-          <span>skills.yml</span>
-        </div>
-        <textarea id="skills"></textarea>
-        <div class="card" style="margin-top:8px;">
-          <div class="row" style="justify-content:space-between;">
-            <span>Diff preview</span>
-            <button class="pill" id="showDiff">Show diff</button>
-          </div>
-          <pre id="diff" style="white-space:pre-wrap" class="small"></pre>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <input id="search" class="pill" placeholder="Search by name/role/model/skill" style="min-width:280px"/>
+          <select id="roleFilter" class="pill"><option value="">All roles</option><option>planner</option><option>executor</option><option>validator</option><option>custom</option></select>
+          <select id="healthFilter" class="pill"><option value="">All health</option><option value="healthy">Healthy</option><option value="stale">Stale</option></select>
+          <button id="addBtn" class="pill">Add</button>
+          <button id="bulkDelete" class="pill">Delete</button>
+          <button id="bulkDuplicate" class="pill">Duplicate</button>
+          <button id="bulkExportJson" class="pill">Export JSON</button>
+          <label class="pill" for="bulkImport">Import JSON</label><input id="bulkImport" type="file" accept="application/json" style="display:none" />
+          <button id="historyUI" class="pill">Diff & Rollback</button>
         </div>
       </div>
-      <div>
-        <div class="controls">
-          <label>Filter agent:</label>
-          <select id="agentFilter">
-            <option value="">All</option>
-            <option value="planner">planner</option>
-            <option value="executor">executor</option>
-            <option value="validator">validator</option>
-          </select>
-          <label>Phase:</label>
-          <select id="phaseFilter">
-            <option value="">All</option>
-            <option value="plan">plan</option>
-            <option value="execute">execute</option>
-            <option value="validate">validate</option>
-          </select>
-        </div>
-        <div id="stream"></div>
+
+      <div id="agentsView">
+        <div class="grid-cards" id="agentCards"></div>
+      </div>
+      <div id="skillsView" style="display:none">
+        <div class="grid-cards" id="skillCards"></div>
+      </div>
+      <div id="onboarding" class="card" style="display:none;margin-top:12px">
+        <div><b>Welcome</b> — Create your first agent and skill</div>
+        <div class="small">Step 1: Add an agent. Step 2: Attach a skill. Step 3: Configure guardrails and approvals.</div>
+        <div class="row" style="margin-top:8px"><button class="pill" id="createSample">Create sample</button></div>
       </div>
     </div>
+
+    <div class="modal" id="editorModal">
+      <div class="content">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <strong id="modalTitle">Edit</strong>
+          <button class="pill" id="closeModal">Close</button>
+        </div>
+        <div id="form"></div>
+        <div class="small" id="validation" style="margin-top:8px"></div>
+        <div class="row" style="justify-content:flex-end;margin-top:12px">
+          <button class="pill" id="testBtn" style="display:none">Test agent</button>
+          <button class="pill" id="saveBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
     <script>
-      const agentsEl = document.getElementById('agents');
-      const skillsEl = document.getElementById('skills');
-      const statusEl = document.getElementById('status');
-      const refreshBtn = document.getElementById('refresh');
-      const saveBtn = document.getElementById('save');
-      const stream = document.getElementById('stream');
-      const agentFilter = document.getElementById('agentFilter');
-      const phaseFilter = document.getElementById('phaseFilter');
-      const validateBtn = document.getElementById('validate');
-      const showDiffBtn = document.getElementById('showDiff');
-      const diffPre = document.getElementById('diff');
-      let baseline = { agents: '', skills: '' };
+      const S = { agents: [], skills: [], status:{}, filter:'', timers:{} };
+      const qs = (s,el=document)=>el.querySelector(s);
+      const qsa = (s,el=document)=>Array.from(el.querySelectorAll(s));
+      function showModal(on){ qs('#editorModal').style.display = on?'flex':'none'; }
 
-      function computeDiff(a,b){
-        const al=a.split('\n'), bl=b.split('\n');
-        const max=Math.max(al.length, bl.length); let out=[];
-        for(let i=0;i<max;i++){
-          const L=(al[i]??''), R=(bl[i]??'');
-          if(L===R) out.push('  '+R); else { if(R!=='') out.push('+ '+R); if(L!=='') out.push('- '+L); }
+      async function loadAll(){
+        const list = await (await fetch('/api/agents/list')).json();
+        S.agents = list.agents||[]; S.skills = list.skills||[]; await refreshStatus(); render();
+      }
+      async function refreshStatus(){ try{ S.status = (await (await fetch('/api/agents/status')).json()).status || {}; } catch{ S.status = {}; } }
+
+      function render(){
+        const f = (S.filter||'').toLowerCase();
+        // agents
+        const g = qs('#agentCards'); g.innerHTML='';
+        for(const a of S.agents){
+          if(f){ const hay = [a.name,a.role,a.model,(a.skills||[]).join(' ')].join(' ').toLowerCase(); if(!hay.includes(f)) continue; }
+          const card = document.createElement('div'); card.className='card'; card.draggable=true; card.dataset.name=a.name||'';
+          const st = S.status[a.name]||{}; const healthy = st.healthy? 'ok':'warn';
+          card.innerHTML = `
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <div class="row" style="gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:var(--border)"></div>
+                <div>
+                  <div><b>${a.name||'(unnamed)'}</b> ${a.on===false?'<span class="small" style="color:var(--warn)">(off)</span>':''}</div>
+                  <div class="small">${a.role||'-'} · ${a.model||'-'}</div>
+                </div>
+              </div>
+              <div class="row">
+                <input type="checkbox" data-select />
+                <button class="pill" data-act="expand">Expand</button>
+                <button class="pill" data-act="edit">Edit</button>
+                <button class="pill" data-act="test">Test</button>
+                <button class="pill" data-act="copyjson">Copy JSON</button>
+                <button class="pill" data-act="copyyaml">Copy YAML</button>
+                <button class="pill" data-act="export">Export</button>
+                <button class="pill" data-act="delete">Delete</button>
+              </div>
+            </div>
+            <div class="row" style="margin-top:8px;justify-content:space-between">
+              <div class="chips">${(a.skills||[]).map(s=>`<span class="chip">${s}</span>`).join('')||'<span class="small">No skills</span>'}</div>
+              <div>${healthy==='ok'?'<span class="badge ok">healthy</span>':'<span class="badge warn">stale</span>'}</div>
+            </div>
+            <div class="row small" data-analytics style="gap:12px;margin-top:6px">
+              <span>calls:<b data-calls>0</b></span>
+              <span>errors:<b data-errors>0</b></span>
+              <span>last:<b data-last>-</b></span>
+              <span>latency:<b data-lat>0ms</b></span>
+            </div>
+          `;
+          card.querySelector('[data-act=\"expand\"]').onclick = ()=> expandAgent(card, a);
+          card.querySelector('[data-act=\"edit\"]').onclick = ()=> openEditor('agent', a);
+          card.querySelector('[data-act=\"test\"]').onclick = ()=> testAgent(a);
+          card.querySelector('[data-act=\"copyjson\"]').onclick = ()=> navigator.clipboard.writeText(JSON.stringify(a,null,2));
+          card.querySelector('[data-act=\"copyyaml\"]').onclick = async ()=>{ const t = await (await fetch(`/api/agents/export-one?name=${encodeURIComponent(a.name)}&format=yaml`)).text(); await navigator.clipboard.writeText(t); };
+          card.querySelector('[data-act=\"export\"]').onclick = async ()=>{ const t = await (await fetch(`/api/agents/export-one?name=${encodeURIComponent(a.name)}&format=yaml`)).text(); const blob = new Blob([t],{type:'text/plain'}); const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`agent_${a.name}.yml`; link.click(); };
+          card.querySelector('[data-act=\"delete\"]').onclick = ()=> deleteAgent(a);
+          g.appendChild(card);
         }
-        return out.join('\n');
+        // skills
+        const sg = qs('#skillCards'); sg.innerHTML='';
+        for(const s of S.skills){
+          if(f){ const hay = [s.name,s.description].join(' ').toLowerCase(); if(!hay.includes(f)) continue; }
+          const card = document.createElement('div'); card.className='card'; card.dataset.name=s.name||'';
+          card.innerHTML = `
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <div>
+                <div><b>${s.name||'(unnamed)'}</b></div>
+                <div class="small">${(s.description||'').slice(0,120)}</div>
+              </div>
+              <div class="row">
+                <button class="pill" data-act="edit">Edit</button>
+                <button class="pill" data-act="delete">Delete</button>
+              </div>
+            </div>
+          `;
+          card.querySelector('[data-act="edit"]').onclick = ()=> openEditor('skill', s);
+          card.querySelector('[data-act="delete"]').onclick = ()=> deleteSkill(s);
+          sg.appendChild(card);
+        }
+        enableDrag();
       }
 
-      async function load() {
-        statusEl.textContent = 'Loading...';
-        const r = await fetch('/api/agents');
-        const data = await r.json();
-        agentsEl.value = data.agents || '';
-        skillsEl.value = data.skills || '';
-        baseline = { agents: agentsEl.value, skills: skillsEl.value };
-        statusEl.textContent = '';
+      function enableDrag(){
+        const container = qs('#agentCards');
+        qsa('.card', container).forEach(c=>{
+          c.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', c.dataset.name); });
+        });
+        container.addEventListener('dragover', e=>{ e.preventDefault(); });
+        container.addEventListener('drop', e=>{
+          e.preventDefault(); const name = e.dataTransfer.getData('text/plain'); const el = qsa('.card', container).find(x=>x.dataset.name===name); const target = e.target.closest('.card'); if(!el || !target || el===target) return; container.insertBefore(el, target);
+          // persist order to S and save
+          const order = qsa('.card', container).map(x=>x.dataset.name);
+          S.agents.sort((a,b)=> order.indexOf(a.name)-order.indexOf(b.name));
+          validateAndMaybeSave(true);
+        });
       }
-      async function validate() {
-        statusEl.textContent = 'Validating...';
-        try {
-          const r = await fetch('/api/agents/validate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: agentsEl.value, skills: skillsEl.value })});
-          const res = await r.json();
-          if(res.ok){ statusEl.textContent = 'Valid ✓'; saveBtn.disabled = false; }
-          else { statusEl.textContent = 'Invalid'; diffPre.textContent = (res.errors||[]).map(e=>`${e.file}: ${e.error}`).join('\n'); saveBtn.disabled = true; }
-        } catch(e) { statusEl.textContent = 'Validation error'; saveBtn.disabled = true; }
-        setTimeout(()=> statusEl.textContent = '', 2000);
-      }
-      async function save() {
-        statusEl.textContent = 'Saving...';
-        const r = await fetch('/api/agents', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agents: agentsEl.value, skills: skillsEl.value }) });
-        const ok = (await r.json()).ok;
-        if(ok) baseline = { agents: agentsEl.value, skills: skillsEl.value };
-        statusEl.textContent = ok ? 'Saved' : 'Error';
-        setTimeout(()=> statusEl.textContent = '', 1500);
-      }
-      refreshBtn.onclick = load;
-      validateBtn.onclick = validate;
-      showDiffBtn.onclick = ()=>{ diffPre.textContent = computeDiff(baseline.agents+'\n---\n'+baseline.skills, agentsEl.value+'\n---\n'+skillsEl.value); };
-      saveBtn.onclick = save;
-      load();
 
-      function statusClass(ev){ if(ev.status==='error') return 'err'; if(ev.status==='awaiting_approval') return 'warn'; if(ev.status==='validated' || ev.kind==='end') return 'ok'; return 'info'; }
-      function render(ev){
-        const af = agentFilter.value, pf = phaseFilter.value;
-        if(af && (ev.agent||'')!==af) return;
-        if(pf && (ev.phase||'')!==pf) return;
-        const div = document.createElement('div');
-        div.className = 'event';
-        const s = statusClass(ev);
-        const ts = ev.ts ? new Date(ev.ts*1000).toISOString() : '';
-        const msg = JSON.stringify(ev.data||{}).replace(/</g,'&lt;');
-        div.innerHTML = `<div class="ts">${ts}</div><div><b>${ev.kind||''}</b> · <span class="${s}">${ev.status||''}</span> · ${ev.phase||''} · ${ev.agent||''}</div><div>${msg}</div>`;
-        stream.prepend(div);
+      function openEditor(kind, obj){
+        S.editKind = kind; S.editObj = JSON.parse(JSON.stringify(obj||{}));
+        qs('#modalTitle').textContent = (obj&&obj.name? 'Edit ':'Create ') + (kind==='agent'?'agent':'skill');
+        const form = qs('#form'); form.innerHTML='';
+        if(kind==='agent'){
+          form.appendChild(kv('Name','text','name'));
+          form.appendChild(kv('Role','select','role',['planner','executor','validator','custom']));
+          form.appendChild(kv('Model','text','model'));
+          form.appendChild(kvSkills('Skills','skills'));
+          form.appendChild(kv('On/Off','selectBool','on'));
+          form.appendChild(kv('Limits (json)','textarea','limits'));
+          form.appendChild(kv('Guardrails (json)','textarea','guardrails'));
+          form.appendChild(kvPolicy());
+          form.appendChild(kvApprovals());
+          qs('#testBtn').style.display=''; qs('#testBtn').onclick = ()=> testAgent(S.editObj);
+        } else {
+          form.appendChild(kv('Name','text','name'));
+          form.appendChild(kv('Description','textarea','description'));
+          form.appendChild(kv('Inputs (json)','textarea','inputs'));
+          form.appendChild(kv('Outputs (json)','textarea','outputs'));
+          form.appendChild(kv('Props (json)','textarea','props'));
+          form.appendChild(kvAgentsAttach());
+          qs('#testBtn').style.display='none';
+        }
+        bindForm(form, S.editObj);
+        showModal(true);
+        validateLive();
       }
-      const es = new EventSource('/events');
-      es.onmessage = (e)=>{ try { render(JSON.parse(e.data)); } catch {} };
+
+      function kvAgentsAttach(){
+        const wrap = document.createElement('div'); wrap.className='kv';
+        wrap.innerHTML = `<label class=\"small\">Attached agents</label><div></div>`; const div = wrap.children[1];
+        for(const ag of S.agents){ const row = document.createElement('div'); row.className='row'; const cb = document.createElement('input'); cb.type='checkbox'; cb.dataset.agent=ag.name; const lab=document.createElement('span'); lab.textContent = ag.name; row.appendChild(cb); row.appendChild(lab); div.appendChild(row); }
+        return wrap;
+      }
+      function kvPolicy(){
+        const wrap = document.createElement('div'); wrap.className='kv';
+        wrap.innerHTML = `<label class=\"small\">Policy</label><div></div>`; const div=wrap.children[1];
+        const sel = document.createElement('select'); sel.dataset.field='policy_preset'; ['Custom','Safe','Balanced','Autonomous'].forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
+        sel.onchange = ()=>{
+          const p = sel.value; const obj = S.editObj; obj.approvals = obj.approvals || {};
+          if(p==='Safe'){ obj.approvals.required = true; obj.approvals.autonomy = 0; obj.guardrails = obj.guardrails||{ blockedCommands:['rm -rf','drop database'] }; }
+          else if(p==='Balanced'){ obj.approvals.required = true; obj.approvals.autonomy = 1; obj.guardrails = obj.guardrails||{ reviewRequired:['write files','git push'] }; }
+          else if(p==='Autonomous'){ obj.approvals.required = false; obj.approvals.autonomy = 3; obj.guardrails = obj.guardrails||{ auditOnly:true }; }
+          validateLive();
+        };
+        div.appendChild(sel);
+        const pyr = document.createElement('div'); pyr.className='small'; pyr.innerText = '▲\n▲▲\n▲▲▲'; div.appendChild(pyr);
+        return wrap;
+      }
+      function kvApprovals(){
+        const wrap = document.createElement('div'); wrap.className='kv';
+        wrap.innerHTML = `<label class="small">Approvals</label><div></div>`; const div = wrap.children[1];
+        const row = document.createElement('div'); row.className='row'; row.style.gap='8px';
+        const req = document.createElement('select'); ['false','true'].forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent = (v==='true'?'Required':'Not required'); req.appendChild(o); }); req.dataset.field='approvals_required';
+        const slider = document.createElement('input'); slider.type='range'; slider.min='0'; slider.max='3'; slider.step='1'; slider.style.width='120px'; slider.dataset.field='approvals_autonomy';
+        const val = document.createElement('span'); val.className='small'; val.textContent='autonomy 0';
+        slider.oninput = ()=>{ val.textContent = `autonomy ${slider.value}`; };
+        row.appendChild(req); row.appendChild(slider); row.appendChild(val);
+        div.appendChild(row);
+        const adv = document.createElement('textarea'); adv.rows=3; adv.dataset.field='approvals_json'; adv.placeholder='Advanced JSON for approvals'; div.appendChild(adv);
+        return wrap;
+      }
+
+      function kv(label, type, field, opts){
+        const wrap = document.createElement('div'); wrap.className='kv';
+        wrap.innerHTML = `<label class="small">${label}</label><div></div>`; const inputWrap = wrap.children[1];
+        let el;
+        if(type==='text'){ el = document.createElement('input'); el.type='text'; el.value=''; }
+        else if(type==='textarea'){ el = document.createElement('textarea'); el.rows=3; el.value=''; }
+        else if(type==='select'){ el = document.createElement('select'); for(const o of (opts||[])){ const opt=document.createElement('option'); opt.value=o; opt.textContent=o; el.appendChild(opt);} }
+        else if(type==='selectBool'){ el = document.createElement('select'); for(const [v,t] of [[true,'On'],[false,'Off']]){ const opt=document.createElement('option'); opt.value=v; opt.textContent=t; el.appendChild(opt);} }
+        inputWrap.appendChild(el);
+        el.dataset.field = field; return wrap;
+      }
+      function kvSkills(label, field){
+        const wrap = document.createElement('div'); wrap.className='kv';
+        wrap.innerHTML = `<label class="small">${label}</label><div></div>`; const inputWrap = wrap.children[1];
+        const select = document.createElement('select'); select.multiple=true; select.size=5; select.style.minHeight='100px';
+        for(const s of S.skills){ const opt = document.createElement('option'); opt.value=s.name; opt.textContent=s.name; select.appendChild(opt); }
+        inputWrap.appendChild(select); select.dataset.field = field; return wrap;
+      }
+      function bindForm(form, obj){
+        // skill attached agents
+        if(S.editKind==='skill'){
+          const checks = qsa('[data-agent]', form); const usedBy = new Set(); for(const ag of S.agents){ if((ag.skills||[]).includes(obj.name)) usedBy.add(ag.name); }
+          checks.forEach(cb=>{ cb.checked = usedBy.has(cb.dataset.agent); cb.onchange = ()=>{ const ag = S.agents.find(x=>x.name===cb.dataset.agent); if(!ag) return; ag.skills = ag.skills||[]; if(cb.checked){ if(!ag.skills.includes(obj.name)) ag.skills.push(obj.name); } else { ag.skills = ag.skills.filter(n=>n!==obj.name); } validateLive(); } });
+        }
+        // init approvals
+        const appr = obj.approvals || {};
+        const reqSel = form.querySelector('[data-field="approvals_required"]'); if(reqSel){ reqSel.value = String(!!appr.required); reqSel.onchange = ()=> updateFromForm(form, obj); }
+        const slider = form.querySelector('[data-field="approvals_autonomy"]'); if(slider){ slider.value = String(Number.isInteger(appr.autonomy)? appr.autonomy:0); const next = slider.nextSibling; if(next && next.classList) next.textContent = `autonomy ${slider.value}`; slider.onchange = ()=> updateFromForm(form, obj); slider.oninput = ()=>{ const next = slider.nextSibling; if(next && next.classList) next.textContent = `autonomy ${slider.value}`; } }
+        const adv = form.querySelector('[data-field="approvals_json"]'); if(adv){ adv.value = appr && Object.keys(appr).length? JSON.stringify(appr, null, 2): ''; adv.oninput = ()=> updateFromForm(form, obj); }
+
+        qsa('[data-field]', form).forEach(el=>{
+          const f = el.dataset.field;
+          // initialize
+          if(el.tagName==='SELECT' && el.multiple){ const set = new Set(obj[f]||[]); Array.from(el.options).forEach(o=>{ o.selected = set.has(o.value); }); }
+          else if(el.tagName==='SELECT' && el.options.length && (el.dataset.field==='on')){ const v = (obj.on!==false); el.value = String(v); }
+          else if(el.tagName==='SELECT'){ el.value = (obj[f]||'') }
+          else if(el.tagName==='TEXTAREA'){ const v = obj[f] ? JSON.stringify(obj[f], null, 2) : ''; el.value = v; }
+          else { el.value = obj[f]||''; }
+          el.oninput = ()=> updateFromForm(form, obj);
+          el.onchange = ()=> updateFromForm(form, obj);
+        });
+      }
+      function updateFromForm(form, obj){
+        qsa('[data-field]', form).forEach(el=>{
+          const f = el.dataset.field;
+          if(f==='approvals_required'){ obj.approvals = obj.approvals || {}; obj.approvals.required = (el.value==='true'); }
+          else if(f==='approvals_autonomy'){ obj.approvals = obj.approvals || {}; obj.approvals.autonomy = parseInt(el.value,10); }
+          else if(f==='approvals_json'){ try{ const j = el.value.trim()? JSON.parse(el.value): {}; obj.approvals = { ...(obj.approvals||{}), ...j }; }catch{} }
+          else if(el.tagName==='SELECT' && el.multiple){ obj[f] = Array.from(el.selectedOptions).map(o=>o.value); }
+          else if(el.tagName==='SELECT' && (f==='on')){ obj.on = (el.value==='true'); }
+          else if(el.tagName==='SELECT'){ obj[f] = el.value; }
+          else if(el.tagName==='TEXTAREA'){ try{ obj[f] = el.value.trim()? JSON.parse(el.value): undefined; }catch{ /* keep as previous until valid */ } }
+          else { obj[f] = el.value; }
+        });
+        validateLive();
+      }
+
+      async function validateLive(){
+        const previewAgents = S.editKind==='agent' ? mergeEdited(S.agents, S.editObj) : S.agents;
+        const previewSkills = S.editKind==='skill' ? mergeEdited(S.skills, S.editObj) : S.skills;
+        try{
+          const r = await fetch('/api/agents/validate-json',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: previewAgents, skills: previewSkills }) });
+          const j = await r.json();
+          qs('#validation').textContent = j.ok? 'Valid ✓' : ('Errors: '+ (j.errors||[]).map(e=>e.file+': '+e.error).join(' | '));
+          return j.ok;
+        } catch{ qs('#validation').textContent = 'Validation error'; return false; }
+      }
+      function mergeEdited(list, obj){ const i = list.findIndex(x=>x.name===obj.name); if(i>=0){ const copy = list.slice(); copy[i] = obj; return copy; } else { return [...list, obj]; } }
+
+      async function validateAndMaybeSave(silent){
+        const ok = await validateLive(); if(!ok && !silent){ alert('Please fix validation errors'); return; }
+        if(silent) return;
+        const res = await fetch('/api/agents/save',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents:S.agents, skills:S.skills }) });
+        const j = await res.json(); if(!j.ok) return alert('Save failed');
+        await fetch('/api/agents/reload',{ method:'POST' });
+        showModal(false); await loadAll();
+      }
+
+      async function saveEdit(){
+        if(S.editKind==='agent'){
+          const i = S.agents.findIndex(x=>x.name===S.editObj.name);
+          if(i>=0) S.agents[i] = S.editObj; else S.agents.push(S.editObj);
+        } else {
+          const i = S.skills.findIndex(x=>x.name===S.editObj.name);
+          if(i>=0) S.skills[i] = S.editObj; else S.skills.push(S.editObj);
+        }
+        await validateAndMaybeSave(false);
+      }
+
+      async function deleteAgent(a){ if(!confirm('Delete agent '+(a.name||'')+'?')) return; S.agents = S.agents.filter(x=>x!==a); await validateAndMaybeSave(false); }
+      async function deleteSkill(s){ if(!confirm('Delete skill '+(s.name||'')+'?')) return; S.skills = S.skills.filter(x=>x!==s); // detach from agents
+        for(const ag of S.agents){ ag.skills = (ag.skills||[]).filter(n=>n!==s.name); }
+        await validateAndMaybeSave(false);
+      }
+
+      async function testAgent(a){ const prompt = window.prompt('Test prompt','Hello'); if(prompt===null) return; await fetch('/api/agents/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent:a.name, prompt }) }); alert('Test triggered (see timeline/log)'); }
+      async function expandAgent(card, a){
+        let pane = card.querySelector('.expand'); if(!pane){ pane = document.createElement('div'); pane.className='expand small'; pane.style.marginTop='8px'; pane.style.whiteSpace='pre-wrap'; card.appendChild(pane); }
+        pane.textContent = 'Loading logs...';
+        try{ const j = await (await fetch(`/api/agents/logs?agent=${encodeURIComponent(a.name)}&limit=50`)).json(); const st = S.status[a.name]||{}; const head = `traffic=${st.traffic||0} errors=${st.errors||0}\n`; const lines = (j.events||[]).map(ev=>`${new Date((ev.ts||0)*1000).toLocaleTimeString()} ${ev.kind||''} ${ev.status||''}`); pane.textContent = head + (lines.join('\n')||'No recent logs'); } catch{ pane.textContent='No logs'; }
+      }
+
+      // events
+      qsa('.tab').forEach(t=>{ t.onclick = ()=>{ qsa('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); const tab=t.dataset.tab; qs('#agentsView').style.display = tab==='agents'?'':'none'; qs('#skillsView').style.display = tab==='skills'?'':'none'; qs('#addBtn').textContent = tab==='agents'? 'Add agent':'Add skill'; }; });
+      qs('#addBtn').onclick = ()=> openEditor(qs('.tab.active').dataset.tab==='agents'?'agent':'skill', { name:'', role:'custom', model:'', skills:[], approvals:{ required:false, autonomy:0 } });
+      qs('#search').oninput = (e)=>{ S.filter = e.target.value; render(); };
+      qs('#roleFilter').onchange = ()=> render();
+      qs('#healthFilter').onchange = ()=> render();
+      qs('#reloadAgents').onclick = async ()=>{ await fetch('/api/agents/reload',{ method:'POST' }); alert('Reload event sent'); };
+      qs('#historyBtn').onclick = async ()=>{ const h = await (await fetch('/api/agents/history')).json(); alert((h.backups||[]).map(b=>`${new Date(b.ts).toLocaleString()} · ${b.name}`).join('\n')||'No backups'); };
+      qs('#historyUI').onclick = async ()=>{ const h = await (await fetch('/api/agents/history')).json(); const name = prompt('Backup to diff/rollback (exact filename):\n'+(h.backups||[]).map(b=>b.name).join('\n')); if(!name) return; const d = await (await fetch(`/api/agents/diff?name=${encodeURIComponent(name)}`)).json(); alert((d.agentsDiff||'') + (d.skillsDiff||'')); if(confirm('Rollback to this backup?')){ await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names:[name] }) }); await loadAll(); } };
+      qs('#exportAgents').onclick = async ()=>{ const j = await (await fetch('/api/agents/export?format=json')).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_export.json'; a.click(); };
+      qs('#bulkExportJson').onclick = async ()=>{
+        const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean);
+        const url = '/api/agents/export?format=json'+(selected.length? `&names=${encodeURIComponent(selected.join(','))}`:'');
+        const j = await (await fetch(url)).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_selected.json'; a.click();
+      };
+      qs('#bulkImport').onchange = async (e)=>{ const file = e.target.files[0]; if(!file) return; const text = await file.text(); try{ const payload = JSON.parse(text); const dry = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...payload, partial:true, dryRun:true }) })).json(); if(!dry.ok){ return alert('Import errors: '+JSON.stringify(dry.errors)); } const apply = confirm('Apply import?'); if(!apply) return; const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...payload, partial:true, dryRun:false }) })).json(); if(!res.ok) return alert('Import failed'); await loadAll(); } catch{ alert('Invalid JSON'); } };
+      qs('#bulkDelete').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); if(!confirm('Delete '+selected.length+' agents?')) return; for(const name of selected){ await fetch(`/api/agents/item?name=${encodeURIComponent(name)}`,{ method:'DELETE' }); } await loadAll(); };
+      qs('#bulkDuplicate').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); const list = S.agents.filter(a=>selected.includes(a.name)); for(const a of list){ const copy = JSON.parse(JSON.stringify(a)); copy.name = a.name+'-copy'; await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent: copy }) }); } await loadAll(); };
+      qs('#closeModal').onclick = ()=> showModal(false);
+      qs('#saveBtn').onclick = saveEdit;
+      qs('#createSample')?.addEventListener('click', async ()=>{ const sampleSkill = { name:'echo', description:'Echo input', inputs:{ text:'string' }, outputs:{ text:'string' } }; const sampleAgent = { name:'agent-1', role:'executor', model:'local', skills:['echo'], approvals:{ required:false, autonomy:1 } }; S.skills.push(sampleSkill); S.agents.push(sampleAgent); await validateAndMaybeSave(false); });
+
+      async function refreshAnalytics(){ try{ const st = await (await fetch('/api/agents/status?window=3600')).json(); S.status = st.status||{}; Array.from(document.querySelectorAll('#agentCards .card')).forEach(card=>{ const name = card.dataset.name; const s = S.status[name]||{}; const root = card.querySelector('[data-analytics]'); if(!root) return; root.querySelector('[data-calls]').textContent = s.calls||0; root.querySelector('[data-errors]').textContent = s.errors||0; root.querySelector('[data-last]').textContent = s.lastTs? new Date(s.lastTs*1000).toLocaleTimeString() : '-'; root.querySelector('[data-lat]').textContent = s.avgLatencyMs? `${Math.round(s.avgLatencyMs)}ms` : '0ms'; }); }catch{} }
+      S.timers.analytics = setInterval(refreshAnalytics, 5000);
+      function updateOnboarding(){ const empty = (!S.agents.length && !S.skills.length); const o = qs('#onboarding'); if(o) o.style.display = empty? '':'none'; }
+      const _loadAll = loadAll; loadAll = async function(){ await _loadAll(); updateOnboarding(); refreshAnalytics(); };
+
+      loadAll();
+      const _render = render; render = function(){ const prev = S.filter; S.filter = document.getElementById('search').value; const role = document.getElementById('roleFilter')?.value||''; const health = document.getElementById('healthFilter')?.value||''; const orig = S.agents.slice(); _render(); Array.from(document.querySelectorAll('#agentCards .card')).forEach(card=>{ const name = card.dataset.name; const a = orig.find(x=>x.name===name); let show = true; if(role && a?.role!==role) show=false; const st = S.status[name]||{}; if(health==='healthy' && !st.healthy) show=false; if(health==='stale' && st.healthy) show=false; card.style.display = show? '':'none'; }); S.filter = prev; };
+
+      loadAll();
     </script>
   </body>
 </html>

@@ -40,12 +40,14 @@
           const row = document.createElement('div');
           row.className='row';
           row.style.justifyContent='space-between';
-          row.innerHTML = `<span class="small">Run #${r.idx} · ${r.count} ev · ${r.errors} err · ${r.approvals} approvals</span><span class=\"row\"><button class=\"pill\" data-act=\"open\">Open</button><button class=\"pill\" data-act=\"replay\">Replay</button></span>`;
+          row.innerHTML = `<span class=\"small\">Run #${r.idx} · ${r.count} ev · ${r.errors} err · ${r.approvals} approvals ${r.runId?`· id=${r.runId}`:''}</span><span class=\"row\"><button class=\"pill\" data-act=\"open\">Open</button><button class=\"pill\" data-act=\"replay\">Replay</button><a class=\"pill\" data-act=\"kpi-json\" href=\"#\">KPI JSON</a><a class=\"pill\" data-act=\"kpi-csv\" href=\"#\">KPI CSV</a></span>`;
           row.querySelector('[data-act="open"]').onclick = async ()=>{
             const text = await (await fetch(`/api/runs/export/${r.idx}`)).text();
             eventsEl.textContent = text;
             downloadEl.href = `/api/runs/export/${r.idx}`;
           };
+          row.querySelector('[data-act=\"kpi-json\"]').onclick = (e)=>{ e.preventDefault(); if(!r.runId) return alert('runId missing'); window.open(`/api/kpi?window=24h&runId=${encodeURIComponent(r.runId)}`,'_blank'); };
+          row.querySelector('[data-act=\"kpi-csv\"]').onclick = (e)=>{ e.preventDefault(); if(!r.runId) return alert('runId missing'); window.open(`/api/kpi?window=24h&runId=${encodeURIComponent(r.runId)}&format=csv`,'_blank'); };
           row.querySelector('[data-act="replay"]').onclick = async ()=>{
             const goal = prompt('Optional new goal (leave empty to reuse):','');
             const res = await fetch(`/api/runs/replay/${r.idx}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ goal: goal||undefined }) });

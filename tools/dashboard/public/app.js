@@ -1,5 +1,5 @@
 // Dashboard logic for index.html
-const state = { events: [], counters: { total:0, errors:0, approvals:0 }, last: {}, approvals: [] };
+const state = { events: [], counters: { total:0, errors:0, approvals:0 }, last: {}, approvals: [], kpiWindow:'15m', kpiRunId:'', kpi:null };
 
 function badge(cls, text){ return `<span class="badge ${cls}">${text}</span>` }
 function clsFor(ev){ if(ev.status==='error') return 'err'; if(ev.status==='awaiting_approval') return 'warn'; if(ev.status==='validated'||ev.kind==='end') return 'ok'; return 'info'; }
@@ -11,6 +11,35 @@ function updateOverview(){
     `<div class="card"><div>Errors</div><div class="row"><span style="font-size:28px;color:var(--err)">${state.counters.errors}</span></div></div>`+
     `<div class="card"><div>Awaiting approvals</div><div class="row"><span style="font-size:28px;color:var(--warn)">${state.counters.approvals}</span></div></div>`+
     `<div class="card"><div>Last phase</div><div class="row">${badge('info', state.last.phase||'-')}</div></div>`;
+}
+
+function fmtSec(s){ if(!s||s<=0) return '0s'; if(s<1) return `${(s*1000|0)}ms`; if(s<60) return `${s.toFixed(1)}s`; const m = Math.floor(s/60); const r = s%60; return `${m}m ${r.toFixed(0)}s`; }
+function pct(x){ return `${(x*100).toFixed(0)}%`; }
+
+function renderKPI(){
+  const el = document.getElementById('kpi'); if(!el) return;
+  const m = state.kpi?.metrics || {};
+  const rows = [];
+  // Each card: label, value, sparkline canvas
+  const cards = [
+    { key:'medianTimeToApprovalSec', label:'Median time-to-approval', value: fmtSec(m.medianTimeToApprovalSec||0) },
+    { key:'successRate', label:'Success rate', value: pct(m.successRate||0) },
+    { key:'avgActionsPerRun', label:'Avg actions per run', value: (m.avgActionsPerRun||0).toFixed(1) },
+    { key:'maxApprovalWaitSec', label:'Max approval wait', value: fmtSec(m.maxApprovalWaitSec||0) },
+    { key:'startedRuns', label:'Runs started', value: String(m.startedRuns||0) },
+  ];
+  el.innerHTML = cards.map((c,i)=>`<div class="card"><div class="row" style="justify-content:space-between;"><span>${c.label}</span><span class="small">${state.kpiWindow}${state.kpiRunId?` · ${state.kpiRunId}`:''}</span></div><div style="font-size:28px">${c.value}</div><canvas id="kpi_spark_${i}" width="220" height="40"></canvas></div>`).join('');
+  // draw sparklines from metrics.sparklinePerMin
+  const series = Array.isArray(m.sparklinePerMin) ? m.sparklinePerMin : [];
+  for(let i=0;i<cards.length;i++){
+    const canvas = document.getElementById(`kpi_spark_${i}`); if(!canvas) continue; const ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if(series.length){
+      const max = Math.max(1, ...series);
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--info'); ctx.beginPath();
+      series.forEach((v,idx)=>{ const x = idx*(canvas.width/Math.max(1,(series.length-1))); const y = canvas.height - (v/max)*canvas.height; if(idx===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke();
+    }
+  }
 }
 
 function renderTimeline(ev){
@@ -92,9 +121,39 @@ function drawHeatmap(){
   const canvas = document.getElementById('heatmap'); if(!canvas) return; const ctx = canvas.getContext('2d');
   const agents = ['planner','executor','validator']; const phases=['plan','execute','validate'];
   const grid = phases.map(()=>agents.map(()=>0));
-  for(const ev of state.events){ const ai = agents.indexOf(ev.agent||''); const pi = phases.indexOf(ev.phase||''); if(ai>=0 && pi>=0) grid[pi][ai]++; }
+  // Prefer time-based heatmap from KPI if available, else fallback to counts
+  const m = state.kpi?.metrics || null;
+  if(m && m.perAgentPhaseTimeSec){
+    for(const phase of phases){ for(const agent of agents){ const key = `${phase}:${agent}`; const r = phases.indexOf(phase), c = agents.indexOf(agent); grid[r][c] = m.perAgentPhaseTimeSec[key]||0; } }
+  } else {
+    for(const ev of state.events){ const ai = agents.indexOf(ev.agent||''); const pi = phases.indexOf(ev.phase||''); if(ai>=0 && pi>=0) grid[pi][ai]++; }
+  }
   const cellW = canvas.width/agents.length; const cellH = canvas.height/phases.length; ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(let r=0;r<phases.length;r++) for(let c=0;c<agents.length;c++){ const v = grid[r][c]; const alpha = Math.min(1, v/5); ctx.fillStyle = `rgba(106,183,255,${alpha})`; ctx.fillRect(c*cellW, r*cellH, cellW-2, cellH-2); }
+  // Normalize by max in grid
+  let max=0; for(let r=0;r<phases.length;r++) for(let c=0;c<agents.length;c++) max = Math.max(max, grid[r][c]); max = Math.max(1, max);
+  for(let r=0;r<phases.length;r++) for(let c=0;c<agents.length;c++){ const v = grid[r][c]; const alpha = Math.min(1, (v/max)); ctx.fillStyle = `rgba(106,183,255,${alpha})`; ctx.fillRect(c*cellW, r*cellH, cellW-2, cellH-2); }
+}
+
+// KPI fetch and controls
+let kpiTimer = null;
+async function fetchKPI(){
+  try{
+    const params = new URLSearchParams(); params.set('window', state.kpiWindow); if(state.kpiRunId) params.set('runId', state.kpiRunId);
+    const d = await (await fetch(`/api/kpi?${params.toString()}`)).json(); state.kpi = d; renderKPI();
+  } catch {}
+}
+function debounceKPI(){ if(kpiTimer) clearTimeout(kpiTimer); kpiTimer = setTimeout(fetchKPI, 600); }
+async function initKPIControls(){
+  const winSel = document.getElementById('kpiWindow'); const runSel = document.getElementById('kpiRun'); if(!winSel||!runSel) return;
+  const exportJson = document.getElementById('exportKpiJson'); const exportCsv = document.getElementById('exportKpiCsv');
+  function buildUrl(fmt){ const p = new URLSearchParams(); p.set('window', state.kpiWindow); if(state.kpiRunId) p.set('runId', state.kpiRunId); if(fmt) p.set('format', fmt); return `/api/kpi?${p.toString()}`; }
+  if(exportJson){ exportJson.onclick = (e)=>{ e.preventDefault(); window.open(buildUrl('json'),'_blank'); }; }
+  if(exportCsv){ exportCsv.onclick = (e)=>{ e.preventDefault(); window.open(buildUrl('csv'),'_blank'); }; }
+  winSel.onchange = ()=>{ state.kpiWindow = winSel.value; fetchKPI(); };
+  runSel.onchange = ()=>{ state.kpiRunId = runSel.value; fetchKPI(); };
+  // populate runs (recent)
+  try { const seg = await (await fetch('/api/runs/segments')).json(); const seen = new Set(); for(const r of (seg.runs||[])){ if(r.runId && !seen.has(r.runId)){ seen.add(r.runId); const opt = document.createElement('option'); opt.value=r.runId; opt.textContent=r.runId; runSel.appendChild(opt);} } } catch {}
+  fetchKPI();
 }
 
 // Console panel
@@ -107,9 +166,10 @@ export function initDashboard(){
   updateOverview();
   loadArtifacts();
   initConsole();
+  initKPIControls();
   const source = new EventSource('/events');
   source.onmessage = (e)=>{
-    try{ const ev = JSON.parse(e.data); state.events.push(ev); applyCounters(ev); updateOverview(); renderTimeline(ev); drawSparkline(); drawHeatmap(); }catch{}
+    try{ const ev = JSON.parse(e.data); state.events.push(ev); applyCounters(ev); updateOverview(); renderTimeline(ev); drawSparkline(); drawHeatmap(); debounceKPI(); }catch{}
   };
   document.getElementById('refreshArtifacts')?.addEventListener('click', loadArtifacts);
   source.onerror = ()=>{
