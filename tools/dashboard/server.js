@@ -1237,6 +1237,159 @@ app.post('/api/marketplace/rate', (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// Real-time Collaboration system
+const sessionsFile = path.join(runtimeDir, 'sessions.json');
+const activityFile = path.join(runtimeDir, 'activity.jsonl');
+const activeSessions = new Map();
+const collabClients = new Set();
+
+function ensureCollabFiles() {
+  if (!fs.existsSync(sessionsFile)) {
+    fs.writeFileSync(sessionsFile, JSON.stringify({ sessions: {} }), 'utf-8');
+  }
+  if (!fs.existsSync(activityFile)) {
+    fs.writeFileSync(activityFile, '', 'utf-8');
+  }
+}
+
+function loadSessions() {
+  try {
+    ensureCollabFiles();
+    return JSON.parse(fs.readFileSync(sessionsFile, 'utf-8')).sessions || {};
+  } catch { return {}; }
+}
+
+function saveSessions(sessions) {
+  try {
+    fs.writeFileSync(sessionsFile, JSON.stringify({ sessions }, null, 2), 'utf-8');
+    broadcastPresence();
+  } catch {}
+}
+
+function logActivity(user, action, details = {}) {
+  try {
+    const entry = {
+      ts: Date.now() / 1000,
+      user,
+      action,
+      details,
+      id: Math.random().toString(36).slice(2)
+    };
+    fs.appendFileSync(activityFile, JSON.stringify(entry) + '\n', 'utf-8');
+    broadcastActivity(entry);
+  } catch {}
+}
+
+function broadcastPresence() {
+  const sessions = loadSessions();
+  const activeUsers = Object.values(sessions)
+    .filter(s => Date.now() - s.lastSeen < 300000) // 5 minutes
+    .map(s => ({ id: s.id, name: s.name, avatar: s.avatar, status: s.status, lastSeen: s.lastSeen }));
+  
+  const data = JSON.stringify({ type: 'presence', users: activeUsers });
+  for (const client of collabClients) {
+    try { client.send(data); } catch { collabClients.delete(client); }
+  }
+}
+
+function broadcastActivity(activity) {
+  const data = JSON.stringify({ type: 'activity', activity });
+  for (const client of collabClients) {
+    try { client.send(data); } catch { collabClients.delete(client); }
+  }
+}
+
+// Collaboration API endpoints
+app.get('/api/activity-feed', (req, res) => {
+  try {
+    const lines = fs.existsSync(activityFile) 
+      ? fs.readFileSync(activityFile, 'utf-8').trim().split('\n').filter(Boolean).slice(-50)
+      : [];
+    const activities = lines.map(line => JSON.parse(line)).reverse(); // Latest first
+    res.json({ activities });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post('/api/session/update', (req, res) => {
+  try {
+    const { id, name, avatar, status, action, page } = req.body || {};
+    if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
+    
+    const sessions = loadSessions();
+    sessions[id] = {
+      id,
+      name,
+      avatar: avatar || '👤',
+      status: status || 'active',
+      lastSeen: Date.now(),
+      page: page || 'dashboard'
+    };
+    
+    saveSessions(sessions);
+    
+    if (action) {
+      logActivity(name, action, { page });
+    }
+    
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.get('/api/session/presence', (req, res) => {
+  try {
+    const sessions = loadSessions();
+    const activeUsers = Object.values(sessions)
+      .filter(s => Date.now() - s.lastSeen < 300000)
+      .map(s => ({ id: s.id, name: s.name, avatar: s.avatar, status: s.status, page: s.page, lastSeen: s.lastSeen }));
+    
+    res.json({ users: activeUsers, total: activeUsers.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post('/api/activity/log', (req, res) => {
+  try {
+    const { user, action, details } = req.body || {};
+    if (!user || !action) return res.status(400).json({ error: 'Missing user or action' });
+    
+    logActivity(user, action, details);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// WebSocket server for collaboration
+const collabWss = new WebSocketServer({ noServer: true });
+
+collabWss.on('connection', (ws, request) => {
+  console.log('[collab-ws] client connected');
+  collabClients.add(ws);
+  
+  // Send initial presence data
+  broadcastPresence();
+  
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      
+      if (msg.type === 'heartbeat') {
+        const sessions = loadSessions();
+        if (sessions[msg.userId]) {
+          sessions[msg.userId].lastSeen = Date.now();
+          saveSessions(sessions);
+        }
+      } else if (msg.type === 'activity') {
+        logActivity(msg.user, msg.action, msg.details);
+      }
+    } catch (e) {
+      console.error('[collab-ws] message error:', e);
+    }
+  });
+  
+  ws.on('close', () => {
+    collabClients.delete(ws);
+    console.log('[collab-ws] client disconnected');
+  });
+});
+
 // WebSocket server for terminal streaming
 const wss = new WebSocketServer({ noServer: true });
 const terminalSessions = new Map();
@@ -1245,6 +1398,10 @@ server.on('upgrade', (request, socket, head) => {
   if (request.url === '/terminal-ws') {
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
+    });
+  } else if (request.url === '/collab-ws') {
+    collabWss.handleUpgrade(request, socket, head, (ws) => {
+      collabWss.emit('connection', ws, request);
     });
   } else {
     socket.destroy();
