@@ -33,7 +33,7 @@ function renderApprovals(){
     row.style.justifyContent='space-between';
     row.innerHTML = `<span class="small">${ap.phase||''} · ${ap.agent||''}</span><button class="pill">Approve</button>`;
     row.querySelector('button').onclick = async ()=>{
-      await approveNow(); // simple global approve event
+      await approveNow(ap.data?.actionId || ap.actionId || null);
     };
     el.prepend(row);
   }
@@ -56,12 +56,36 @@ async function loadArtifacts(){
   } catch {}
 }
 
+function drawSparkline(){
+  const canvas = document.getElementById('sparkline'); if(!canvas) return; const ctx = canvas.getContext('2d');
+  const now = Date.now()/1000; const windowMin = 15; const buckets = new Array(windowMin).fill(0);
+  for(const ev of state.events){ const dt = Math.floor((now - (ev.ts||now))/60); if(dt>=0 && dt<windowMin) buckets[windowMin-1-dt]++; }
+  ctx.clearRect(0,0,canvas.width,canvas.height); const max = Math.max(1, ...buckets);
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--info'); ctx.beginPath();
+  buckets.forEach((v,i)=>{ const x = i*(canvas.width/(windowMin-1)); const y = canvas.height - (v/max)*canvas.height; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke();
+}
+function drawHeatmap(){
+  const canvas = document.getElementById('heatmap'); if(!canvas) return; const ctx = canvas.getContext('2d');
+  const agents = ['planner','executor','validator']; const phases=['plan','execute','validate'];
+  const grid = phases.map(()=>agents.map(()=>0));
+  for(const ev of state.events){ const ai = agents.indexOf(ev.agent||''); const pi = phases.indexOf(ev.phase||''); if(ai>=0 && pi>=0) grid[pi][ai]++; }
+  const cellW = canvas.width/agents.length; const cellH = canvas.height/phases.length; ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let r=0;r<phases.length;r++) for(let c=0;c<agents.length;c++){ const v = grid[r][c]; const alpha = Math.min(1, v/5); ctx.fillStyle = `rgba(106,183,255,${alpha})`; ctx.fillRect(c*cellW, r*cellH, cellW-2, cellH-2); }
+}
+
+// Console panel
+let consolePaused = false; let consoleTimer = null; let lastConsole = '';
+async function pollConsole(){ if(consolePaused) return; try{ const d = await (await fetch('/api/console')).json(); const el = document.getElementById('consoleOut'); if(!el) return; if(d.content!==lastConsole){ el.textContent = d.content||''; el.scrollTop = el.scrollHeight; lastConsole = d.content; } } catch {}
+}
+function initConsole(){ const pauseBtn = document.getElementById('pauseConsole'); const clearBtn = document.getElementById('clearConsole'); if(pauseBtn){ pauseBtn.onclick = ()=>{ consolePaused = !consolePaused; pauseBtn.textContent = consolePaused ? 'Resume' : 'Pause'; }; } if(clearBtn){ clearBtn.onclick = async ()=>{ await fetch('/api/clear-console',{method:'POST'}); lastConsole=''; pollConsole(); }; } consoleTimer = setInterval(pollConsole, 2000); }
+
 export function initDashboard(){
   updateOverview();
   loadArtifacts();
+  initConsole();
   const source = new EventSource('/events');
   source.onmessage = (e)=>{
-    try{ const ev = JSON.parse(e.data); state.events.push(ev); applyCounters(ev); updateOverview(); renderTimeline(ev);}catch{}
+    try{ const ev = JSON.parse(e.data); state.events.push(ev); applyCounters(ev); updateOverview(); renderTimeline(ev); drawSparkline(); drawHeatmap(); }catch{}
   };
   document.getElementById('refreshArtifacts')?.addEventListener('click', loadArtifacts);
   source.onerror = ()=>{
@@ -74,7 +98,7 @@ export function initDashboard(){
 }
 
 export async function runScenario(name){ await fetch(`/api/run/${name}`, { method:'POST' }); }
-export async function approveNow(){
-  const ev = { ts: Date.now()/1000, kind:'approval_granted', status:'ok', data:{ by:'ui' } };
+export async function approveNow(actionId){
+  const ev = { ts: Date.now()/1000, kind:'approval_granted', status:'ok', data:{ by:'ui', actionId: actionId||null } };
   await fetch('/api/events/append',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(ev)});
 }

@@ -4,6 +4,7 @@ import os
 from fnmatch import fnmatch
 from ..logging import log_event
 from ..agents.concrete.executor import Executor
+import uuid
 
 
 def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -20,13 +21,13 @@ def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
         model_actions = res.get("actions", {})
         # Normalize into our internal format
         for cmd in (model_actions.get("posix") or []):
-            actions.append({"name": "model", "cmd": cmd, "paths": [], "dry_run": True})
+            actions.append({"id": str(uuid.uuid4()), "name": "model", "cmd": cmd, "paths": [], "dry_run": True})
     except Exception:
         # fallback deterministic proposals
         actions = [
-            {"name": "build(frontend)", "cmd": ["bash", "05_WORKFLOWS/slash-commands/build/build.sh"], "paths": ["tools/dashboard/**"], "dry_run": True},
-            {"name": "test", "cmd": ["bash", "05_WORKFLOWS/slash-commands/test/test.sh"], "paths": ["tests/**", "**/*.py"], "dry_run": True},
-            {"name": "plan-report", "cmd": ["bash", "05_WORKFLOWS/slash-commands/plan/plan.sh", "Project status"], "paths": ["runtime/plan.md"], "dry_run": True},
+            {"id": str(uuid.uuid4()), "name": "build(frontend)", "cmd": ["bash", "05_WORKFLOWS/slash-commands/build/build.sh"], "paths": ["tools/dashboard/**"], "dry_run": True},
+            {"id": str(uuid.uuid4()), "name": "test", "cmd": ["bash", "05_WORKFLOWS/slash-commands/test/test.sh"], "paths": ["tests/**", "**/*.py"], "dry_run": True},
+            {"id": str(uuid.uuid4()), "name": "plan-report", "cmd": ["bash", "05_WORKFLOWS/slash-commands/plan/plan.sh", "Project status"], "paths": ["runtime/plan.md"], "dry_run": True},
         ]
     # Windows alternatives (for display)
     actions_ps = [
@@ -50,11 +51,11 @@ def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
         for a in group:
             level = _needs_approval(a.get("paths", []))
             a["approval"] = level
-            log_event("action_proposed", {"cmd": a["cmd"], "approval": level, "paths": a.get("paths")}, phase="execute")
+            log_event("action_proposed", {"actionId": a.get("id"), "cmd": a["cmd"], "approval": level, "paths": a.get("paths")}, phase="execute")
 
     # Optional simulation: add a risky action to demonstrate manual approval gates
     if (state.get("context") or {}).get("simulate_risky"):
-        risky = {"name": "infra-apply", "cmd": ["bash", "echo", "apply"], "paths": ["infrastructure/prod/apply.tf"], "dry_run": True}
+        risky = {"id": str(uuid.uuid4()), "name": "infra-apply", "cmd": ["bash", "echo", "apply"], "paths": ["infrastructure/prod/apply.tf"], "dry_run": True}
         level = _needs_approval(risky["paths"])
         risky["approval"] = level
         actions.append(risky)
@@ -63,7 +64,7 @@ def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
     # Optional: add multiple risky actions for stress tests
     if (state.get("context") or {}).get("simulate_many_risky"):
         for i in range(3):
-            r = {"name": f"infra-apply-{i}", "cmd": ["bash", "echo", "apply", str(i)], "paths": [f"infrastructure/prod/apply{i}.tf"], "dry_run": True}
+            r = {"id": str(uuid.uuid4()), "name": f"infra-apply-{i}", "cmd": ["bash", "echo", "apply", str(i)], "paths": [f"infrastructure/prod/apply{i}.tf"], "dry_run": True}
             r["approval"] = _needs_approval(r["paths"])
             actions.append(r)
             log_event("action_proposed", {"cmd": r["cmd"], "approval": r["approval"], "paths": r.get("paths")}, phase="execute")
@@ -73,6 +74,6 @@ def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
     approvals = []
     for a in actions:
         if a.get("approval") == "manual":
-            approvals.append({"action": a["name"], "reason": "matches manual_required_globs", "confirmation_phrase": "I APPROVE THIS CRITICAL ACTION"})
+            approvals.append({"actionId": a.get("id"), "action": a["name"], "cmd": a.get("cmd"), "reason": "matches manual_required_globs", "confirmation_phrase": "I APPROVE THIS CRITICAL ACTION"})
     status = "awaiting_approval" if approvals else "actions_proposed"
     return {"actions": proposed, "approvals": approvals, "status": status}

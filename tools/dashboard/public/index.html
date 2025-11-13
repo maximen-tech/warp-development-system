@@ -54,6 +54,23 @@
               <div class="small">No artifacts yet</div>
             </div>
           </div>
+          <div class="card">
+            <div class="row" style="justify-content:space-between;">
+              <span>Analytics</span>
+            </div>
+            <canvas id="sparkline" width="300" height="60"></canvas>
+            <canvas id="heatmap" width="300" height="120" style="margin-top:8px"></canvas>
+          </div>
+          <div class="card">
+            <div class="row" style="justify-content:space-between;">
+              <span>Console</span>
+              <div class="row">
+                <button class="pill" id="pauseConsole">Pause</button>
+                <button class="pill" id="clearConsole">Clear</button>
+              </div>
+            </div>
+            <pre id="consoleOut" class="small" style="white-space:pre-wrap;max-height:200px;overflow:auto"></pre>
+          </div>
         </div>
       </div>
     </div>
@@ -61,6 +78,18 @@
       import { initDashboard, runScenario, approveNow } from '/app.js';
       window.runScenario = runScenario; window.approveNow = approveNow;
       initDashboard();
+      // drag & drop layout persist
+      const wrap = document.querySelector('.wrap');
+      function restoreLayout(){
+        try{ const order = JSON.parse(localStorage.getItem('layout:v1')||'[]'); const cards = Array.from(document.querySelectorAll('.card')); const map = {}; cards.forEach(c=>{ map[c.dataset.id] = c; }); order.forEach(id=>{ if(map[id]) wrap.appendChild(map[id]); }); }catch{}
+      }
+      function enableDrag(){
+        for(const c of document.querySelectorAll('.card')){ c.draggable = true; c.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', c.dataset.id || (c.dataset.id = Math.random().toString(36).slice(2))); }); }
+        wrap.addEventListener('dragover', e=>{ e.preventDefault(); });
+        wrap.addEventListener('drop', e=>{ e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); const el = document.querySelector(`.card[data-id="${id}"]`); if(!el) return; const target = e.target.closest('.card'); if(target && target!==el){ wrap.insertBefore(el, target); const order = Array.from(document.querySelectorAll('.card')).map(x=>x.dataset.id); localStorage.setItem('layout:v1', JSON.stringify(order)); }
+        });
+      }
+      restoreLayout(); enableDrag();
       // theme init + artifacts markdown rendering
       (async ()=>{ const r = await fetch('/api/theme'); const t = (await r.json()).theme; document.documentElement.classList.toggle('light', t==='light'); })();
       document.getElementById('themeToggle').onclick = async ()=>{

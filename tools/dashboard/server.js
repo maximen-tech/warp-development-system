@@ -216,6 +216,9 @@ app.get('/api/console', (req, res) => {
     res.json({ content: buf.toString('utf-8') });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
+app.post('/api/clear-console', (_req, res) => {
+  try { const logPath = path.join(runtimeDir, 'console.log'); fs.writeFileSync(logPath, '', 'utf-8'); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: String(e) }); }
+});
 
 // Theme persist
 const themeFile = path.join(runtimeDir, 'theme.txt');
