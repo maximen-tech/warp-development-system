@@ -119,6 +119,9 @@ app.post('/api/agents/save', async (req, res) => {
     await writeYAMLList(agentsFile, 'agents', agents||[]);
     await writeYAMLList(skillsFile, 'skills', skills||[]);
     logChange('save', { beforeAgents, beforeSkills, reason: reason||null });
+    // advance pointer to latest backup (agents wins if present)
+    const ptr = beforeAgents || beforeSkills || '';
+    if(ptr) fs.writeFileSync(versionPtrFile, ptr, 'utf-8');
     res.json({ ok:true });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
@@ -268,6 +271,8 @@ if(dryRun) return res.json({ ok:true, dryRun:true });
     await writeYAMLList(agentsFile,'agents', nextAgents);
     await writeYAMLList(skillsFile,'skills', nextSkills);
     logChange('import', { partial: !!partial, beforeAgents, beforeSkills });
+    const ptr = beforeAgents || beforeSkills || '';
+    if(ptr) fs.writeFileSync(versionPtrFile, ptr, 'utf-8');
     res.json({ ok:true });
   }catch(e){ res.status(500).json({ error:String(e) }); }
 });
@@ -296,6 +301,8 @@ app.post('/api/agents/rollback-group', async (req,res)=>{
     const ts = Date.now(); if (fs.existsSync(agentsFile)) fs.copyFileSync(agentsFile, path.join(backupDir, `agents.${ts}.yml`)); if (fs.existsSync(skillsFile)) fs.copyFileSync(skillsFile, path.join(backupDir, `skills.${ts}.yml`));
 for(const nm of names){ const src = path.join(backupDir, nm); if(fs.existsSync(src)){ if(nm.startsWith('agents')) fs.copyFileSync(src, agentsFile); else if(nm.startsWith('skills')) fs.copyFileSync(src, skillsFile); } }
     logChange('rollback', { names });
+    // set pointer to last applied name
+    fs.writeFileSync(versionPtrFile, names[names.length-1], 'utf-8');
     res.json({ ok:true });
   }catch(e){ res.status(500).json({ error:String(e) }); }
 });
@@ -762,6 +769,19 @@ app.get('/api/approval-mode', (_req, res) => {
 });
 app.post('/api/approval-mode', (req, res) => {
   try { const m = (req.body || {}).mode || 'strict'; fs.writeFileSync(approvalModeFile, m, 'utf-8'); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// SSE for changelog (agents_changes.jsonl)
+app.get('/agents-changes', (req,res)=>{
+  res.setHeader('Content-Type','text/event-stream');
+  res.setHeader('Cache-Control','no-cache');
+  res.setHeader('Connection','keep-alive');
+  res.flushHeaders();
+  try{ if(fs.existsSync(changeLogFile)){ const lines = fs.readFileSync(changeLogFile,'utf-8').trim().split('\n').slice(-50); for(const l of lines){ res.write(`data: ${l}\n\n`);} } }catch{}
+  const watcher = chokidar.watch(changeLogFile,{ persistent:true, ignoreInitial:true });
+  const onChange = ()=>{ try{ const content = fs.readFileSync(changeLogFile,'utf-8').trim().split('\n'); const tail = content.slice(-20); for(const l of tail) res.write(`data: ${l}\n\n`); }catch{} };
+  watcher.on('change', onChange);
+  req.on('close', ()=>{ watcher.close().catch(()=>{}); res.end(); });
 });
 
 app.listen(PORT, () => {

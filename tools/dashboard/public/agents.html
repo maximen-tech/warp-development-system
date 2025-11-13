@@ -26,6 +26,8 @@
       <span class="pill" id="reloadAgents">Reload</span>
       <span class="pill" id="historyBtn">History</span>
       <span class="pill" id="exportAgents">Export (YAML)</span>
+      <span class="pill" id="changelogBtn">Changelog</span>
+      <span class="pill" id="marketBtn">Marketplace</span>
     </header>
     <div class="wrap">
       <div class="row" style="justify-content:space-between;align-items:center">
@@ -87,6 +89,25 @@
         <div class="small" id="importStatus"></div>
         <div id="importTable" class="small" style="max-height:40vh;overflow:auto"></div>
         <div class="row" style="justify-content:flex-end"><button class="pill" id="applyImport" disabled>Apply selected</button></div>
+      </div>
+    </div>
+
+    <!-- Changelog Modal -->
+    <div class="modal" id="changelogModal" style="display:none">
+      <div class="content" style="max-width:900px">
+        <div class="row" style="justify-content:space-between;align-items:center"><strong>Changelog</strong><button class="pill" onclick="closeModal('#changelogModal')">Close</button></div>
+        <div class="small">Last changes:</div>
+        <div id="chgList" class="small" style="max-height:50vh;overflow:auto"></div>
+      </div>
+    </div>
+
+    <!-- Marketplace Modal -->
+    <div class="modal" id="marketModal" style="display:none">
+      <div class="content" style="max-width:700px">
+        <div class="row" style="justify-content:space-between;align-items:center"><strong>Import skills by URL</strong><button class="pill" onclick="closeModal('#marketModal')">Close</button></div>
+        <div class="row" style="gap:8px"><input id="marketUrl" class="pill" placeholder="https://... (JSON or YAML)" style="min-width:420px"/><button class="pill" id="marketPreview">Preview</button><button class="pill" id="marketApply" disabled>Import</button></div>
+        <div id="marketStatus" class="small"></div>
+        <div id="marketTable" class="small" style="max-height:40vh;overflow:auto"></div>
       </div>
     </div>
 
@@ -412,6 +433,8 @@
       qs('#healthFilter').onchange = ()=> render();
       qs('#reloadAgents').onclick = async ()=>{ await fetch('/api/agents/reload',{ method:'POST' }); alert('Reload event sent'); };
       qs('#historyBtn').onclick = async ()=>{ const h = await (await fetch('/api/agents/history')).json(); alert((h.backups||[]).map(b=>`${new Date(b.ts).toLocaleString()} · ${b.name}`).join('\n')||'No backups'); };
+      qs('#changelogBtn').onclick = ()=>{ openModal('#changelogModal'); };
+      (function(){ const src = new EventSource('/agents-changes'); const list = document.getElementById('chgList'); src.onmessage = (e)=>{ try{ const ev = JSON.parse(e.data); const div = document.createElement('div'); div.textContent = `[${new Date((ev.ts||0)*1000).toLocaleTimeString()}] ${ev.kind} ${JSON.stringify(ev.details||{})}`; const btn = document.createElement('button'); btn.className='pill'; btn.textContent='Undo this'; btn.onclick = async ()=>{ const d = ev.details||{}; const names=[]; if(d.beforeAgents) names.push(d.beforeAgents); if(d.beforeSkills) names.push(d.beforeSkills); if(!names.length) return alert('No backup to rollback to for this entry'); await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names }) }); await loadAll(); }; const row = document.createElement('div'); row.className='row'; row.style.justifyContent='space-between'; row.appendChild(div); row.appendChild(btn); list.prepend(row); }catch{} }; })();
       qs('#historyUI').onclick = async ()=>{ openModal('#diffModal'); try{ const h = await (await fetch('/api/agents/history')).json(); const sel = qs('#backupSelect'); sel.innerHTML=''; for(const b of (h.backups||[])){ const o=document.createElement('option'); o.value=b.name; o.textContent = `${new Date(b.ts).toLocaleString()} · ${b.name}`; sel.appendChild(o); } }catch{} };
       qs('#loadDiff').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; const d = await (await fetch(`/api/agents/diff?name=${encodeURIComponent(name)}`)).json(); qs('#diffOut').textContent = (d.agentsDiff||'') + (d.skillsDiff? ('\n'+d.skillsDiff) : ''); const txt = await (await fetch(`/api/agents/backup-content?name=${encodeURIComponent(name)}`)).text(); const isAgents = name.startsWith('agents'); const curAgents = isAgents ? (await (await fetch('/api/agents')).json()).agents : ''; const curSkills = isAgents ? '' : (await (await fetch('/api/agents')).json()).skills; qs('#diffBefore').textContent = txt; qs('#diffAfter').textContent = isAgents? curAgents : curSkills; };
       qs('#doRollback').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; if(!confirm('Rollback to '+name+'?')) return; await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names:[name] }) }); closeModal('#diffModal'); await loadAll(); };
@@ -421,8 +444,11 @@
         const url = '/api/agents/export?format=json'+(selected.length? `&names=${encodeURIComponent(selected.join(','))}`:'');
         const j = await (await fetch(url)).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_selected.json'; a.click();
       };
-      qs('#bulkImport').onchange = async (e)=>{ const file = e.target.files[0]; if(!file) return; openModal('#importModal'); const status = qs('#importStatus'); const table = qs('#importTable'); status.textContent='Parsing...'; let payload=null; try{ const text = await file.text(); if(file.type==='application/json' || text.trim().startsWith('{') || text.trim().startsWith('[')){ payload = JSON.parse(text); } else { // naive CSV to agents list
-            const rows = text.split(/\r?\n/).filter(Boolean).map(r=>r.split(',')); const head = rows.shift()||[]; const idxName=head.indexOf('name'), idxRole=head.indexOf('role'), idxModel=head.indexOf('model'), idxSkills=head.indexOf('skills'); const agents=[]; for(const r of rows){ agents.push({ name:r[idxName], role:r[idxRole], model:r[idxModel], skills:(r[idxSkills]||'').split('|').filter(Boolean) }); } payload={ agents }; }
+      qs('#bulkImport').onchange = async (e)=>{ const file = e.target.files[0]; if(!file) return; openModal('#importModal'); const status = qs('#importStatus'); const table = qs('#importTable'); status.textContent='Parsing...'; let payload=null; try{ const textRaw = await file.text(); const text = textRaw.replace(/\uFEFF/, ''); // strip BOM
+          // simple delimiter sniff
+          const delim = (text.includes(';') && text.split('\n')[0].split(';').length > 1) ? ';' : (text.includes('\t') ? '\t' : ',');
+          if(file.type==='application/json' || text.trim().startsWith('{') || text.trim().startsWith('[')){ payload = JSON.parse(text); } else { // naive CSV to agents list
+            const rows = text.split(/\r?\n/).filter(Boolean).map(r=>r.split(delim)); const head = rows.shift()||[]; const idxName=head.indexOf('name'), idxRole=head.indexOf('role'), idxModel=head.indexOf('model'), idxSkills=head.indexOf('skills'); const agents=[]; for(const r of rows){ agents.push({ name:r[idxName], role:r[idxRole], model:r[idxModel], skills:(r[idxSkills]||'').split('|').filter(Boolean) }); } payload={ agents }; }
           // Preview table
           const agents = Array.isArray(payload.agents)? payload.agents: []; const skills = Array.isArray(payload.skills)? payload.skills: [];
           const rows = [];
@@ -446,6 +472,13 @@
 
       // Drag & drop importer
       (function(){ const dz = document.getElementById('dropzone'); if(!dz) return; dz.ondragover = (e)=>{ e.preventDefault(); dz.style.borderColor='var(--info)'; }; dz.ondragleave = ()=>{ dz.style.borderColor='var(--border)'; }; dz.ondrop = async (e)=>{ e.preventDefault(); dz.style.borderColor='var(--border)'; const f = e.dataTransfer.files[0]; if(!f) return; const input = document.getElementById('bulkImport'); input.files = e.dataTransfer.files; input.onchange({ target: input }); }; })();
+
+      // Marketplace flow
+      document.getElementById('marketBtn').onclick = ()=> openModal('#marketModal');
+      document.getElementById('marketPreview').onclick = async ()=>{ const url = document.getElementById('marketUrl').value.trim(); const status = document.getElementById('marketStatus'); const table = document.getElementById('marketTable'); status.textContent='Fetching...'; table.innerHTML=''; try{ const j = await (await fetch('/api/skills/import-url',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url })})).json(); if(!j.ok) { status.textContent='Error'; return; } const skills = j.skills||[]; const rows = []; rows.push('<table class="small"><tr><th><input type=checkbox id=mkAll checked/></th><th>Name</th><th>Description</th></tr>'); skills.forEach((s,i)=> rows.push(`<tr><td><input type=checkbox data-mk=${i} checked/></td><td>${s.name}</td><td>${(s.description||'').slice(0,80)}</td></tr>`)); rows.push('</table>'); table.innerHTML = rows.join(''); status.textContent = `Found ${skills.length} skills`; document.getElementById('marketApply').disabled = skills.length===0; document.getElementById('mkAll').onchange = (ev)=>{ const on = ev.target.checked; qsa('[data-mk]', table).forEach(cb=> cb.checked=on); }; document.getElementById('marketApply').onclick = async ()=>{ const sel=[]; qsa('[data-mk]:checked', table).forEach(cb=> sel.push(skills[parseInt(cb.dataset.mk,10)])); if(!sel.length) return; // dry-run validate
+          const dry = await (await fetch('/api/agents/validate-json',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: S.agents, skills: [...S.skills, ...sel] })})).json(); if(!dry.ok){ status.textContent='Validation errors: '+(dry.errors||[]).map(e=>e.file).join(', '); return; }
+          const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ skills: sel, partial:true, dryRun:false }) })).json(); if(!res.ok){ status.textContent = 'Import failed'; return; } closeModal('#marketModal'); await loadAll(); };
+        }catch{ status.textContent='Fetch failed'; } };
       qs('#bulkDelete').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); if(!confirm('Delete '+selected.length+' agents?')) return; for(const name of selected){ await fetch(`/api/agents/item?name=${encodeURIComponent(name)}`,{ method:'DELETE' }); } await loadAll(); };
       qs('#bulkDuplicate').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); const list = S.agents.filter(a=>selected.includes(a.name)); for(const a of list){ const copy = JSON.parse(JSON.stringify(a)); copy.name = a.name+'-copy'; await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent: copy }) }); } await loadAll(); };
       qs('#closeModal').onclick = ()=> showModal(false);
