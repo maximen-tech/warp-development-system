@@ -958,6 +958,108 @@ app.get('/api/prompts/metrics', (_req,res)=>{
   }catch(e){ res.status(500).json({ error:String(e) }); }
 });
 
+// Projects Platform API
+const projectsFile = path.join(runtimeDir, 'projects.json');
+
+function ensureProjectsFile() {
+  if (!fs.existsSync(projectsFile)) {
+    fs.writeFileSync(projectsFile, JSON.stringify({ projects: [], meta: { version: '1.0.0', last_updated: Date.now() } }, null, 2), 'utf-8');
+  }
+}
+
+function loadProjects() {
+  try {
+    ensureProjectsFile();
+    return JSON.parse(fs.readFileSync(projectsFile, 'utf-8')).projects || [];
+  } catch { return []; }
+}
+
+function saveProjects(projects) {
+  try {
+    const data = { projects, meta: { version: '1.0.0', last_updated: Date.now() } };
+    fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2), 'utf-8');
+  } catch {}
+}
+
+// Projects API endpoints
+app.get('/api/projects', (req, res) => {
+  try {
+    const { search, stack, status, sort } = req.query;
+    let projects = loadProjects();
+    
+    // Apply filters
+    if (search) {
+      const query = search.toLowerCase();
+      projects = projects.filter(p => 
+        p.name.toLowerCase().includes(query) ||
+        p.tech_stack.some(t => t.toLowerCase().includes(query))
+      );
+    }
+    
+    if (stack) projects = projects.filter(p => p.tech_stack.includes(stack));
+    if (status) projects = projects.filter(p => p.status === status);
+    
+    // Apply sorting
+    projects.sort((a, b) => {
+      switch (sort) {
+        case 'name': return a.name.localeCompare(b.name);
+        case 'optimization': return b.optimization_level - a.optimization_level;
+        case 'accessed': return b.last_accessed - a.last_accessed;
+        default: return b.last_accessed - a.last_accessed;
+      }
+    });
+    
+    res.json({ projects, total: projects.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.get('/api/projects/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const projects = loadProjects();
+    const project = projects.find(p => p.id === id);
+    
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    
+    // Update last accessed
+    project.last_accessed = Date.now();
+    saveProjects(projects);
+    
+    res.json({ project });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.put('/api/projects/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body || {};
+    const projects = loadProjects();
+    const index = projects.findIndex(p => p.id === id);
+    
+    if (index === -1) return res.status(404).json({ error: 'Project not found' });
+    
+    projects[index] = { ...projects[index], ...updates, id }; // Preserve ID
+    saveProjects(projects);
+    
+    res.json({ ok: true, project: projects[index] });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.delete('/api/projects/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const projects = loadProjects();
+    const filtered = projects.filter(p => p.id !== id);
+    
+    if (filtered.length === projects.length) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    saveProjects(filtered);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 const server = app.listen(PORT, () => {
   if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
   if (!fs.existsSync(eventsFile)) fs.writeFileSync(eventsFile, '', 'utf-8');

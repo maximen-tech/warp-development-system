@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projects Hub - Warp Platform</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/dashboard-pro.css" />
+  <link rel="stylesheet" href="/projects.css" />
+</head>
+<body>
+  <header role="banner" class="header">
+    <h1 class="header__title">🏗️ Projects Hub</h1>
+    <nav class="header__nav" role="navigation" aria-label="Main navigation">
+      <a class="nav-link" href="/">← Dashboard</a>
+      <a class="nav-link" href="/agents.html">Agents</a>
+      <a class="nav-link" href="/library.html">📚 Library</a>
+      <a class="nav-link" href="/marketplace.html">🛒 Marketplace</a>
+    </nav>
+    <div class="header__controls">
+      <button class="button primary" onclick="showCreateModal()">➕ Create Project</button>
+      <button class="button secondary" onclick="showImportModal()">📥 Import Project</button>
+    </div>
+  </header>
+  
+  <main id="main" role="main" class="projects-page">
+    <section class="projects-controls" aria-label="Project Filters">
+      <div class="search-box">
+        <input id="searchInput" type="search" placeholder="🔍 Search projects..." aria-label="Search projects" />
+      </div>
+      
+      <div class="filter-group">
+        <select id="stackFilter" aria-label="Filter by tech stack">
+          <option value="">All Stacks</option>
+          <option value="Node.js">Node.js</option>
+          <option value="Python">Python</option>
+          <option value="Go">Go</option>
+          <option value="React">React</option>
+        </select>
+        
+        <select id="statusFilter" aria-label="Filter by status">
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+          <option value="error">Error</option>
+        </select>
+        
+        <select id="sortBy" aria-label="Sort projects">
+          <option value="accessed">Last Accessed</option>
+          <option value="name">Name A-Z</option>
+          <option value="optimization">Optimization %</option>
+        </select>
+        
+        <button class="button secondary small" onclick="clearFilters()">Clear</button>
+      </div>
+    </section>
+    
+    <section class="projects-stats" aria-label="Projects Stats">
+      <div class="stat-card">
+        <div class="stat-card__label">Total Projects</div>
+        <div class="stat-card__value" id="projectsCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__label">Active</div>
+        <div class="stat-card__value" id="activeCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__label">Avg Optimization</div>
+        <div class="stat-card__value" id="avgOptimization">0%</div>
+      </div>
+    </section>
+    
+    <section aria-label="Projects Grid">
+      <div class="projects-grid" id="projectsGrid">
+        <div class="loading-state">Loading projects...</div>
+      </div>
+    </section>
+  </main>
+  
+  <script src="/projects.js"></script>
+</body>
+</html>

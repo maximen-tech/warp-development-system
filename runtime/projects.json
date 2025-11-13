@@ -1,0 +1,29 @@
+{
+  "projects": [
+    {
+      "id": "proj_sample_001",
+      "name": "Warp Development System",
+      "path": "C:\\Users\\maxco\\Projects\\warp-development-system",
+      "status": "active",
+      "tech_stack": ["Node.js", "JavaScript", "Express"],
+      "created_at": 1705132800000,
+      "last_accessed": 1705132800000,
+      "optimization_level": 95,
+      "config": {
+        "agents_count": 5,
+        "skills_count": 12,
+        "has_ci": true,
+        "has_tests": true
+      },
+      "stats": {
+        "loc": 15420,
+        "files": 87,
+        "last_commit": "2025-01-13T06:26:00Z"
+      }
+    }
+  ],
+  "meta": {
+    "version": "1.0.0",
+    "last_updated": 1705132800000
+  }
+}
