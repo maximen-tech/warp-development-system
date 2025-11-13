@@ -1,0 +1,38 @@
+name: Init-Warp-Dev-System
+on:
+  workflow_dispatch:
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install markdownlint-cli2
+        run: npm i -g markdownlint-cli2
+      - name: Lint Markdown
+        run: markdownlint-cli2 "**/*.md" "!node_modules"
+      - name: Install yamllint
+        run: |
+          sudo apt-get update && sudo apt-get install -y yamllint
+      - name: Lint YAML
+        run: yamllint -d '{extends: default, rules: {line-length: disable}}' .
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+      - name: Shellcheck
+        run: |
+          shopt -s globstar || true
+          shellcheck -x **/*.sh || true
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -Filter *.ps1 | Select-Object -ExpandProperty FullName
+          if ($files.Count -gt 0) { Invoke-ScriptAnalyzer -Path $files -Recurse -Severity Warning } else { Write-Host "No ps1 files" }
+      - name: Summary
+        run: |
+          echo "Initialized Warp Dev System: linted Markdown/YAML, analyzed shell/PowerShell scripts."
