@@ -1,0 +1,93 @@
+{
+  "items": [
+    {
+      "id": "skill-terminal-pro",
+      "type": "skill",
+      "name": "Terminal Pro",
+      "description": "Advanced terminal operations with safety checks",
+      "version": "2.1.0",
+      "rating": 4.8,
+      "downloads": 1250,
+      "tags": [
+        "terminal",
+        "safety"
+      ],
+      "author": "warp-team",
+      "price": 0,
+      "dependencies": []
+    },
+    {
+      "id": "agent-code-reviewer",
+      "type": "agent",
+      "name": "Code Reviewer",
+      "description": "AI-powered code review agent with security analysis",
+      "version": "1.5.2",
+      "rating": 4.9,
+      "downloads": 890,
+      "tags": [
+        "code",
+        "security",
+        "review"
+      ],
+      "author": "community",
+      "price": 0,
+      "dependencies": [
+        "skill-terminal-pro"
+      ]
+    },
+    {
+      "id": "workflow-ci-cd",
+      "type": "workflow",
+      "name": "CI/CD Pipeline",
+      "description": "Complete CI/CD workflow with testing and deployment",
+      "version": "3.0.1",
+      "rating": 4.7,
+      "downloads": 2100,
+      "tags": [
+        "ci",
+        "cd",
+        "deployment"
+      ],
+      "author": "warp-team",
+      "price": 0,
+      "dependencies": [
+        "skill-terminal-pro"
+      ]
+    },
+    {
+      "id": "skill-docker-manager",
+      "type": "skill",
+      "name": "Docker Manager",
+      "description": "Container management and orchestration skill",
+      "version": "1.8.0",
+      "rating": 4.6,
+      "downloads": 650,
+      "tags": [
+        "docker",
+        "containers"
+      ],
+      "author": "community",
+      "price": 0,
+      "dependencies": []
+    },
+    {
+      "id": "agent-security-scanner",
+      "type": "agent",
+      "name": "Security Scanner",
+      "description": "Automated security vulnerability scanning",
+      "version": "2.2.0",
+      "rating": 4.5,
+      "downloads": 420,
+      "tags": [
+        "security",
+        "scanning"
+      ],
+      "author": "security-team",
+      "price": 0,
+      "dependencies": [
+        "skill-terminal-pro",
+        "skill-docker-manager"
+      ]
+    }
+  ]
+}

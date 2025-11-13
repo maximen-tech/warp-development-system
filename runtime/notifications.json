@@ -1,0 +1,64 @@
+{
+  "notifications": [
+    {
+      "id": "yax2he1d9q",
+      "type": "success",
+      "title": "Install Complete",
+      "message": "Terminal Pro has been installed successfully",
+      "data": {},
+      "timestamp": 1763014228690,
+      "read": true,
+      "actions": [
+        {
+          "id": "dismiss",
+          "label": "Dismiss"
+        }
+      ]
+    },
+    {
+      "id": "x144zouec9",
+      "type": "success",
+      "title": "Install Complete",
+      "message": "Code Reviewer has been installed successfully",
+      "data": {},
+      "timestamp": 1763014231385,
+      "read": true,
+      "actions": [
+        {
+          "id": "dismiss",
+          "label": "Dismiss"
+        }
+      ]
+    },
+    {
+      "id": "703c7tiar1",
+      "type": "success",
+      "title": "Install Complete",
+      "message": "Docker Manager has been installed successfully",
+      "data": {},
+      "timestamp": 1763014252024,
+      "read": true,
+      "actions": [
+        {
+          "id": "dismiss",
+          "label": "Dismiss"
+        }
+      ]
+    },
+    {
+      "id": "ipi3u8if93m",
+      "type": "success",
+      "title": "Install Complete",
+      "message": "Security Scanner has been installed successfully",
+      "data": {},
+      "timestamp": 1763014253045,
+      "read": true,
+      "actions": [
+        {
+          "id": "dismiss",
+          "label": "Dismiss"
+        }
+      ]
+    }
+  ]
+}
