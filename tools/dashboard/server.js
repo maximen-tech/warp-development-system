@@ -2,12 +2,14 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import chokidar from 'chokidar';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
 import { scaffoldProject, getAvailableTemplates } from './lib/scaffolder.js';
 import { analyzeCodebase } from './lib/analyzer.js';
 import { optimizeProject } from './lib/optimizer.js';
 import CodeWatcher from './lib/code-watcher.js';
+import PromptSynthesizer from './lib/prompt-synthesizer.js';
 import { spawn } from 'child_process';
 import { WebSocketServer } from 'ws';
 
@@ -1043,7 +1045,28 @@ app.put('/api/projects/:id', (req, res) => {
     
     if (index === -1) return res.status(404).json({ error: 'Project not found' });
     
-    projects[index] = { ...projects[index], ...updates, id }; // Preserve ID
+    // Validate name if provided
+    if (updates.name !== undefined) {
+      if (typeof updates.name !== 'string' || updates.name.length < 2) {
+        return res.status(400).json({ error: 'Project name must be at least 2 characters' });
+      }
+      // Check for duplicate names (excluding current project)
+      if (projects.some((p, i) => i !== index && p.name.toLowerCase() === updates.name.toLowerCase())) {
+        return res.status(400).json({ error: 'Project name already exists' });
+      }
+    }
+    
+    // Validate status if provided
+    if (updates.status !== undefined && !['active', 'archived', 'error'].includes(updates.status)) {
+      return res.status(400).json({ error: 'Invalid status value' });
+    }
+    
+    // Don't allow changing critical fields
+    delete updates.id;
+    delete updates.created_at;
+    delete updates.path;
+    
+    projects[index] = { ...projects[index], ...updates };
     saveProjects(projects);
     
     res.json({ ok: true, project: projects[index] });
@@ -1075,7 +1098,26 @@ app.get('/api/projects/templates', (req, res) => {
 app.post('/api/projects/create', async (req, res) => {
   try {
     const { name, template } = req.body;
-    if (!name || !template) return res.status(400).json({ error: 'Name and template required' });
+    
+    // Validation
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+    if (name.length < 2) {
+      return res.status(400).json({ error: 'Project name must be at least 2 characters' });
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      return res.status(400).json({ error: 'Project name can only contain letters, numbers, hyphens and underscores' });
+    }
+    if (!template || !['nextjs', 'express', 'python', 'blank'].includes(template)) {
+      return res.status(400).json({ error: 'Invalid template selected' });
+    }
+    
+    // Check for duplicate names
+    let projects = loadProjects();
+    if (projects.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+      return res.status(400).json({ error: 'Project name already exists' });
+    }
 
     const result = await scaffoldProject({ name, template, basePath: PROJECTS_BASE });
     const analysis = await analyzeCodebase(result.path);
@@ -1094,7 +1136,7 @@ app.post('/api/projects/create', async (req, res) => {
       stats: analysis.stats
     };
 
-    const projects = loadProjects();
+    projects = loadProjects();
     projects.push(project);
     saveProjects(projects);
 
@@ -1108,13 +1150,31 @@ app.post('/api/projects/create', async (req, res) => {
 app.post('/api/projects/import', async (req, res) => {
   try {
     const { source, type } = req.body;
-    if (!source) return res.status(400).json({ error: 'Source required' });
+    
+    if (!source || typeof source !== 'string') {
+      return res.status(400).json({ error: 'Source is required' });
+    }
+    if (!type || !['url', 'path'].includes(type)) {
+      return res.status(400).json({ error: 'Import type must be "url" or "path"' });
+    }
 
     let projectPath, projectName;
 
     if (type === 'url') {
+      // Validate Git URL format
+      const gitUrlPattern = /^(https?:\/\/|git@)[\w\-\.]+[\/:].*\.git$/;
+      if (!gitUrlPattern.test(source) && !source.startsWith('https://') && !source.startsWith('git@')) {
+        return res.status(400).json({ error: 'Invalid Git repository URL' });
+      }
+      
       projectName = source.split('/').pop().replace('.git', '');
       projectPath = path.join(PROJECTS_BASE, projectName);
+      
+      // Check if directory already exists
+      if (fs.existsSync(projectPath)) {
+        return res.status(400).json({ error: 'Project directory already exists' });
+      }
+      
       execSync(`git clone ${source} "${projectPath}"`, { stdio: 'inherit' });
     } else {
       projectPath = source;
