@@ -1,0 +1,393 @@
+/* =============================================================================
+   PHASE 7 - ENHANCED DARK MODE (GAFA-QUALITY)
+   Elegant gradient backgrounds, tinted cards, vibrant accents
+   ============================================================================= */
+
+/* === ENHANCED DARK MODE BASE === */
+.v3-layout {
+  background: linear-gradient(135deg, #0F172A 0%, #1A1F2E 50%, #0F1923 100%);
+  background-attachment: fixed;
+}
+
+/* === ELEVATED SURFACES === */
+.v3-header {
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* === HERO CARDS (ENHANCED GRADIENTS) === */
+.v3-hero-card--primary {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.12) 0%,
+    rgba(14, 165, 233, 0.08) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 
+    0 4px 6px rgba(59, 130, 246, 0.1),
+    0 1px 3px rgba(59, 130, 246, 0.08);
+}
+
+.v3-hero-card--primary:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.18) 0%,
+    rgba(14, 165, 233, 0.12) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  box-shadow: 
+    0 20px 25px rgba(59, 130, 246, 0.15),
+    0 10px 10px rgba(59, 130, 246, 0.1);
+}
+
+.v3-hero-card--success {
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.12) 0%,
+    rgba(5, 150, 105, 0.08) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 
+    0 4px 6px rgba(16, 185, 129, 0.1),
+    0 1px 3px rgba(16, 185, 129, 0.08);
+}
+
+.v3-hero-card--success:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.18) 0%,
+    rgba(5, 150, 105, 0.12) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  box-shadow: 
+    0 20px 25px rgba(16, 185, 129, 0.15),
+    0 10px 10px rgba(16, 185, 129, 0.1);
+}
+
+.v3-hero-card--danger {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.12) 0%,
+    rgba(220, 38, 38, 0.08) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 
+    0 4px 6px rgba(239, 68, 68, 0.1),
+    0 1px 3px rgba(239, 68, 68, 0.08);
+}
+
+.v3-hero-card--danger:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.18) 0%,
+    rgba(220, 38, 38, 0.12) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  box-shadow: 
+    0 20px 25px rgba(239, 68, 68, 0.15),
+    0 10px 10px rgba(239, 68, 68, 0.1);
+}
+
+.v3-hero-card--warning {
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.12) 0%,
+    rgba(217, 119, 6, 0.08) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 
+    0 4px 6px rgba(245, 158, 11, 0.1),
+    0 1px 3px rgba(245, 158, 11, 0.08);
+}
+
+.v3-hero-card--warning:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.18) 0%,
+    rgba(217, 119, 6, 0.12) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  box-shadow: 
+    0 20px 25px rgba(245, 158, 11, 0.15),
+    0 10px 10px rgba(245, 158, 11, 0.1);
+}
+
+/* === CARDS (ELEVATED + TINTED) === */
+.card {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(71, 85, 105, 0.3);
+}
+
+.card:hover {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(71, 85, 105, 0.5);
+}
+
+/* === TIMELINE CARD === */
+.v3-timeline-card {
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.8) 0%,
+    rgba(30, 41, 59, 0.6) 100%
+  );
+}
+
+/* === SIDEBAR CARDS === */
+.v3-approvals-card,
+.v3-artifacts-card {
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.8) 0%,
+    rgba(30, 41, 59, 0.6) 100%
+  );
+}
+
+/* === DROPDOWN MENUS (GLASS EFFECT) === */
+.v3-dropdown-menu {
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(71, 85, 105, 0.5);
+}
+
+/* === BUTTONS (VIBRANT) === */
+.btn--primary {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn--primary:hover {
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.btn--success {
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn--success:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.btn--danger {
+  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn--danger:hover {
+  background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+/* === INPUTS (ENHANCED) === */
+.input,
+.select,
+.textarea {
+  background: rgba(51, 65, 85, 0.5);
+  border-color: rgba(71, 85, 105, 0.5);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  background: rgba(51, 65, 85, 0.7);
+  border-color: var(--color-primary);
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.1),
+    0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+/* === NAVIGATION (ACTIVE STATE GLOW) === */
+.v3-nav-item--active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+/* === FLOATING FOOTER BUTTONS (VIBRANT) === */
+.v3-footer-btn {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  box-shadow: 
+    0 10px 25px rgba(59, 130, 246, 0.3),
+    0 4px 10px rgba(59, 130, 246, 0.2);
+}
+
+.v3-footer-btn:hover {
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+  box-shadow: 
+    0 20px 40px rgba(59, 130, 246, 0.4),
+    0 8px 16px rgba(59, 130, 246, 0.3);
+}
+
+/* === NOTIFICATION BADGE (PULSING) === */
+.v3-badge {
+  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  box-shadow: 
+    0 0 10px rgba(239, 68, 68, 0.5),
+    0 0 20px rgba(239, 68, 68, 0.3);
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 
+      0 0 10px rgba(239, 68, 68, 0.5),
+      0 0 20px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 
+      0 0 15px rgba(239, 68, 68, 0.7),
+      0 0 30px rgba(239, 68, 68, 0.5);
+  }
+}
+
+/* === TABS (ENHANCED) === */
+.v3-tab--active {
+  color: var(--color-primary);
+  text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+/* === PROGRESS BAR (SHIMMER) === */
+.v3-progress-fill {
+  background: linear-gradient(
+    90deg,
+    var(--color-success) 0%,
+    var(--color-success-light) 50%,
+    var(--color-success) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* === AVATAR (GRADIENT) === */
+.v3-avatar {
+  background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+  box-shadow: 
+    0 0 0 2px rgba(30, 41, 59, 1),
+    0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+/* === EMPTY STATES (SUBTLE GLOW) === */
+.v3-empty-icon {
+  opacity: 0.3;
+  filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.2));
+}
+
+/* === SCROLLBAR (STYLED) === */
+.v3-timeline-content::-webkit-scrollbar,
+.v3-approvals-list::-webkit-scrollbar,
+.v3-artifacts-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.v3-timeline-content::-webkit-scrollbar-track,
+.v3-approvals-list::-webkit-scrollbar-track,
+.v3-artifacts-list::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: var(--radius-full);
+}
+
+.v3-timeline-content::-webkit-scrollbar-thumb,
+.v3-approvals-list::-webkit-scrollbar-thumb,
+.v3-artifacts-list::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius-full);
+}
+
+.v3-timeline-content::-webkit-scrollbar-thumb:hover,
+.v3-approvals-list::-webkit-scrollbar-thumb:hover,
+.v3-artifacts-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* === BORDER ENHANCEMENTS === */
+.v3-header {
+  border-bottom-color: rgba(59, 130, 246, 0.1);
+}
+
+.v3-dropdown-divider {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(71, 85, 105, 0.5) 50%,
+    transparent 100%
+  );
+}
+
+/* === SUBTLE DEPTH === */
+.v3-logo svg {
+  filter: drop-shadow(0 2px 8px rgba(59, 130, 246, 0.3));
+}
+
+.v3-hero-card__icon {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* === LIGHT MODE OVERRIDES (if needed) === */
+html.light .v3-layout {
+  background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 50%, #E2E8F0 100%);
+}
+
+html.light .v3-header {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom-color: rgba(226, 232, 240, 0.8);
+}
+
+html.light .card {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(226, 232, 240, 0.6);
+}
+
+html.light .v3-hero-card--primary {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.08) 0%,
+    rgba(14, 165, 233, 0.05) 50%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
+}
+
+html.light .v3-hero-card--success {
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.08) 0%,
+    rgba(5, 150, 105, 0.05) 50%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
+}
+
+html.light .v3-hero-card--danger {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.08) 0%,
+    rgba(220, 38, 38, 0.05) 50%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
+}
+
+html.light .v3-hero-card--warning {
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.08) 0%,
+    rgba(217, 119, 6, 0.05) 50%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
+}

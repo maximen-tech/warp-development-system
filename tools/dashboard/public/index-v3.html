@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Warp Dashboard</title>
+    <!-- Design System CSS (Phase 6 + 7) -->
+  <link rel="stylesheet" href="/css/design-system.css">
+  <link rel="stylesheet" href="/css/layout.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/animations.css">
+  <link rel="stylesheet" href="/css/responsive.css">
+  <link rel="stylesheet" href="/css/layout-v3.css">
+  <link rel="stylesheet" href="/css/dark-mode-enhanced.css">
+    <link rel="stylesheet" href="/css/dark-mode-enhanced.css" />
+    <!-- Legacy Styles -->
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/dashboard-pro.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/themes/prism-tomorrow.css" />
+    <!-- xterm.js for terminal -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+    <link rel="stylesheet" href="/terminal-panel.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/collab.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script src="/terminal-panel.js"></script>
+    <script src="/notifications.js"></script>
+    <script src="/collab.js"></script>
+    <script src="/context-switcher.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-core.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-diff.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-markdown.min.js"></script>
+    <script defer src="/quickbar.js"></script>
+    <script defer src="/ux-suite.js"></script>
+  </head>
+  <body class="v3-layout">
+    <a href="#main" class="skip-nav">Skip to main content</a>
+    
+    <!-- TIER 1: Top Navigation (4 primary + dropdown) -->
+    <header role="banner" class="v3-header">
+      <div class="v3-header__container">
+        <div class="v3-header__left">
+          <a href="/" class="v3-logo" aria-label="Warp Dashboard Home">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="16" cy="16" r="16" fill="url(#gradient)"/>
+              <path d="M16 8L20 16L16 24L12 16L16 8Z" fill="white"/>
+              <defs>
+                <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
+                  <stop offset="0%" stop-color="#3B82F6"/>
+                  <stop offset="100%" stop-color="#06B6D4"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </a>
+          
+          <nav class="v3-nav-primary" role="navigation" aria-label="Main navigation">
+            <a href="/" class="v3-nav-item v3-nav-item--active" aria-current="page">
+              <span class="v3-nav-icon">🎯</span>
+              <span class="v3-nav-text">Dashboard</span>
+            </a>
+            <a href="/workflow-builder.html" class="v3-nav-item">
+              <span class="v3-nav-icon">🚀</span>
+              <span class="v3-nav-text">Workflows</span>
+            </a>
+            <a href="/agents.html" class="v3-nav-item">
+              <span class="v3-nav-icon">🤖</span>
+              <span class="v3-nav-text">Agents</span>
+            </a>
+            <a href="/marketplace.html" class="v3-nav-item">
+              <span class="v3-nav-icon">🛒</span>
+              <span class="v3-nav-text">Marketplace</span>
+            </a>
+            
+            <div class="v3-nav-dropdown">
+              <button class="v3-nav-item v3-nav-item--dropdown" aria-expanded="false" aria-haspopup="true">
+                <span class="v3-nav-icon">⋯</span>
+                <span class="v3-nav-text">More</span>
+              </button>
+              <div class="v3-dropdown-menu" role="menu">
+                <a href="/prompts.html" class="v3-dropdown-item" role="menuitem">Prompts</a>
+                <a href="/library.html" class="v3-dropdown-item" role="menuitem">📚 Library</a>
+                <a href="/analytics.html" class="v3-dropdown-item" role="menuitem">📈 Analytics</a>
+                <a href="/projects.html" class="v3-dropdown-item" role="menuitem">🏗️ Projects</a>
+                <div class="v3-dropdown-divider"></div>
+                <button class="v3-dropdown-item" onclick="toggleTerminal()" role="menuitem">🖥 Terminal</button>
+              </div>
+            </div>
+          </nav>
+        </div>
+        
+        <div class="v3-header__right">
+          <button class="v3-notification-btn" id="notificationBtn" aria-label="Notifications">
+            🔔
+            <span class="v3-badge" id="notificationBadge" style="display: none;">0</span>
+          </button>
+          
+          <div class="v3-profile-dropdown">
+            <button class="v3-profile-btn" aria-expanded="false" aria-haspopup="true">
+              <span class="v3-avatar">
+                <span class="v3-avatar-text">U</span>
+              </span>
+            </button>
+            <div class="v3-dropdown-menu v3-dropdown-menu--right" role="menu">
+              <div class="v3-dropdown-header">
+                <div class="v3-dropdown-user-name">User</div>
+                <div class="v3-dropdown-user-email">user@example.com</div>
+              </div>
+              <div class="v3-dropdown-divider"></div>
+              <a href="/approvals.html" class="v3-dropdown-item" role="menuitem">⚙️ Settings</a>
+              <button class="v3-dropdown-item" id="themeToggle" role="menuitem">🌓 Toggle Theme</button>
+              <div class="v3-dropdown-divider"></div>
+              <button class="v3-dropdown-item v3-dropdown-item--danger" role="menuitem">🚪 Logout</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- TIER 2: Hero KPI Cards -->
+    <main id="main" role="main" class="v3-main">
+      <div class="v3-container">
+        <section class="v3-hero-section" aria-label="Key Performance Indicators">
+          <div class="v3-hero-grid">
+            <!-- KPI Card 1: Total Events (Primary) -->
+            <article class="v3-hero-card v3-hero-card--primary" data-kpi="total-events">
+              <div class="v3-hero-card__icon">📊</div>
+              <div class="v3-hero-card__content">
+                <div class="v3-hero-card__label">Total Events</div>
+                <div class="v3-hero-card__value" id="heroTotalEvents">0</div>
+                <div class="v3-hero-card__trend v3-hero-card__trend--positive">
+                  <span class="v3-trend-icon">↑</span>
+                  <span class="v3-trend-text" id="heroTotalTrend">--</span>
+                </div>
+              </div>
+              <div class="v3-hero-card__sparkline">
+                <canvas id="heroSparkline1" width="120" height="40"></canvas>
+              </div>
+            </article>
+
+            <!-- KPI Card 2: Success Rate (Success) -->
+            <article class="v3-hero-card v3-hero-card--success" data-kpi="success-rate">
+              <div class="v3-hero-card__icon">✅</div>
+              <div class="v3-hero-card__content">
+                <div class="v3-hero-card__label">Success Rate</div>
+                <div class="v3-hero-card__value" id="heroSuccessRate">0%</div>
+                <div class="v3-hero-card__breakdown" id="heroSuccessBreakdown">0 passed / 0 failed</div>
+              </div>
+              <div class="v3-hero-card__progress">
+                <div class="v3-progress-bar">
+                  <div class="v3-progress-fill" id="heroSuccessProgress" style="width: 0%"></div>
+                </div>
+              </div>
+            </article>
+
+            <!-- KPI Card 3: Critical Errors (Alert) -->
+            <article class="v3-hero-card v3-hero-card--danger" data-kpi="errors" id="heroErrorCard">
+              <div class="v3-hero-card__icon">⚠️</div>
+              <div class="v3-hero-card__content">
+                <div class="v3-hero-card__label">Critical Errors</div>
+                <div class="v3-hero-card__value" id="heroErrors">0</div>
+                <div class="v3-hero-card__status" id="heroErrorStatus">No errors</div>
+              </div>
+              <button class="v3-hero-card__action btn btn--ghost" id="heroViewErrors" style="display: none;">
+                View Details
+              </button>
+            </article>
+
+            <!-- KPI Card 4: Pending Approvals (Action) -->
+            <article class="v3-hero-card v3-hero-card--warning" data-kpi="approvals">
+              <div class="v3-hero-card__icon">✋</div>
+              <div class="v3-hero-card__content">
+                <div class="v3-hero-card__label">Pending Approvals</div>
+                <div class="v3-hero-card__value" id="heroApprovals">0</div>
+                <div class="v3-hero-card__preview" id="heroApprovalPreview">No pending approvals</div>
+              </div>
+              <button class="btn btn--primary" id="heroReviewApprovals" onclick="approveNow()">
+                Review Now
+              </button>
+            </article>
+          </div>
+        </section>
+
+        <!-- TIER 3: Main Content (2-column layout) -->
+        <div class="v3-content-grid">
+          <!-- LEFT COLUMN: Timeline -->
+          <section class="v3-timeline-section" aria-label="Recent Activity">
+            <div class="card v3-timeline-card">
+              <header class="card__header v3-timeline-header">
+                <h2 class="card__title">
+                  <span class="v3-section-icon">📝</span>
+                  Recent Activity
+                </h2>
+                <div class="v3-timeline-controls">
+                  <div class="v3-search-box">
+                    <input 
+                      type="search" 
+                      id="timelineSearch" 
+                      class="input v3-search-input" 
+                      placeholder="Search events..." 
+                      aria-label="Search timeline events"
+                    />
+                    <span class="v3-search-icon">🔍</span>
+                  </div>
+                  <select id="timelineFilter" class="select v3-timeline-filter" aria-label="Filter by time range">
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="all">All Time</option>
+                  </select>
+                </div>
+              </header>
+              
+              <div class="v3-timeline-content" id="timelineContent" role="log" aria-live="polite">
+                <!-- Timeline groups will be inserted here by JavaScript -->
+                <div class="v3-timeline-empty" id="timelineEmpty">
+                  <div class="v3-empty-icon">📭</div>
+                  <div class="v3-empty-text">No events to display</div>
+                  <div class="v3-empty-subtext">Events will appear here as they occur</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- RIGHT COLUMN: Approvals + Artifacts -->
+          <aside class="v3-sidebar-section" aria-label="Dashboard Panels">
+            <!-- Approvals Queue -->
+            <section class="v3-approvals-widget">
+              <div class="card v3-approvals-card">
+                <header class="card__header">
+                  <h3 class="card__title">
+                    <span class="v3-section-icon">✋</span>
+                    Approvals Queue
+                    <span class="v3-badge v3-badge--danger" id="approvalCountBadge" style="display: none;">0</span>
+                  </h3>
+                  <button class="btn btn--primary btn--small" onclick="approveNow()">
+                    Approve All
+                  </button>
+                </header>
+                
+                <div class="v3-approvals-list" id="approvalsList" role="list">
+                  <div class="v3-empty-state">
+                    <div class="v3-empty-icon">✅</div>
+                    <div class="v3-empty-text">No pending approvals</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Artifacts (Tabbed) -->
+            <section class="v3-artifacts-widget">
+              <div class="card v3-artifacts-card">
+                <div class="v3-tabs" role="tablist">
+                  <button class="v3-tab v3-tab--active" data-tab="logs" role="tab" aria-selected="true" aria-controls="logsPanel">
+                    Logs
+                  </button>
+                  <button class="v3-tab" data-tab="config" role="tab" aria-selected="false" aria-controls="configPanel">
+                    Config
+                  </button>
+                  <button class="v3-tab" data-tab="data" role="tab" aria-selected="false" aria-controls="dataPanel">
+                    Data
+                  </button>
+                </div>
+                
+                <div class="v3-tab-content">
+                  <div class="v3-tab-panel v3-tab-panel--active" id="logsPanel" role="tabpanel">
+                    <div class="v3-artifacts-search">
+                      <input type="search" class="input v3-artifacts-search-input" placeholder="Search logs..." />
+                    </div>
+                    <div class="v3-artifacts-list" id="logsList">
+                      <div class="v3-empty-state-small">No logs available</div>
+                    </div>
+                  </div>
+                  
+                  <div class="v3-tab-panel" id="configPanel" role="tabpanel" hidden>
+                    <div class="v3-artifacts-search">
+                      <input type="search" class="input v3-artifacts-search-input" placeholder="Search config..." />
+                    </div>
+                    <div class="v3-artifacts-list" id="configList">
+                      <div class="v3-empty-state-small">No config files</div>
+                    </div>
+                  </div>
+                  
+                  <div class="v3-tab-panel" id="dataPanel" role="tabpanel" hidden>
+                    <div class="v3-artifacts-search">
+                      <input type="search" class="input v3-artifacts-search-input" placeholder="Search data..." />
+                    </div>
+                    <div class="v3-artifacts-list" id="dataList">
+                      <div class="v3-empty-state-small">No data files</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Quick Actions (Legacy Controls) -->
+            <section class="v3-actions-widget" style="display: none;" id="legacyControls">
+              <div class="card">
+                <header class="card__header">
+                  <h3 class="card__title">Dev Actions</h3>
+                </header>
+                <div class="v3-actions-grid">
+                  <button class="btn btn--secondary btn--small" onclick="runScenario('happy')">Run Happy</button>
+                  <button class="btn btn--secondary btn--small" onclick="runScenario('escalation')">Run Escalation</button>
+                  <button class="btn btn--secondary btn--small" onclick="runScenario('edge')">Run Edge</button>
+                  <button class="btn btn--secondary btn--small" id="toggleStrict">Strict Mode</button>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+
+    <!-- TIER 4: Floating Footer Panel -->
+    <div class="v3-footer-panel" id="footerPanel">
+      <button class="v3-footer-btn" id="helpBtn" aria-label="Help" title="Help & Onboarding">
+        <span class="v3-footer-icon">❓</span>
+      </button>
+      <button class="v3-footer-btn" id="feedbackBtn" aria-label="Send Feedback" title="Send Feedback">
+        <span class="v3-footer-icon">💬</span>
+      </button>
+      <button class="v3-footer-btn" id="terminalToggle" aria-label="Toggle Terminal" title="Toggle Terminal (Ctrl+`)">
+        <span class="v3-footer-icon">🖥</span>
+      </button>
+    </div>
+
+    <!-- Hidden accessibility descriptions -->
+    <div class="sr-only">
+      <div id="await-desc">Show events awaiting approval</div>
+      <div id="errors-desc">Show events with errors</div>
+      <div id="export-json-desc">Download KPI metrics as JSON file</div>
+      <div id="export-csv-desc">Download KPI metrics as CSV file</div>
+      <div id="theme-desc">Switch between light and dark theme</div>
+      <div id="strict-desc">Toggle strict approval mode</div>
+      <div id="happy-desc">Run happy path test scenario</div>
+      <div id="escalation-desc">Run escalation test scenario</div>
+      <div id="edge-desc">Run edge case test scenario</div>
+      <div id="approve-desc">Simulate approval for pending requests</div>
+    </div>
+
+    <script type="module">
+      import { initDashboard, runScenario, approveNow, showToast } from '/app.js';
+      window.runScenario = runScenario;
+      window.approveNow = approveNow;
+      window.showToast = showToast;
+
+      // Initialize dashboard
+      initDashboard();
+
+      // V3 Enhancements
+      const v3 = {
+        // Dropdown toggles
+        initDropdowns() {
+          document.querySelectorAll('[aria-haspopup="true"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const expanded = btn.getAttribute('aria-expanded') === 'true';
+              btn.setAttribute('aria-expanded', !expanded);
+              btn.closest('.v3-nav-dropdown, .v3-profile-dropdown')?.classList.toggle('active');
+            });
+          });
+
+          document.addEventListener('click', () => {
+            document.querySelectorAll('[aria-expanded="true"]').forEach(btn => {
+              btn.setAttribute('aria-expanded', 'false');
+              btn.closest('.v3-nav-dropdown, .v3-profile-dropdown')?.classList.remove('active');
+            });
+          });
+        },
+
+        // Tab system
+        initTabs() {
+          document.querySelectorAll('.v3-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+              const tabId = tab.dataset.tab;
+              const card = tab.closest('.v3-artifacts-card');
+              
+              card.querySelectorAll('.v3-tab').forEach(t => {
+                t.classList.remove('v3-tab--active');
+                t.setAttribute('aria-selected', 'false');
+              });
+              
+              card.querySelectorAll('.v3-tab-panel').forEach(panel => {
+                panel.classList.remove('v3-tab-panel--active');
+                panel.hidden = true;
+              });
+              
+              tab.classList.add('v3-tab--active');
+              tab.setAttribute('aria-selected', 'true');
+              const panel = card.querySelector(`#${tabId}Panel`);
+              if (panel) {
+                panel.classList.add('v3-tab-panel--active');
+                panel.hidden = false;
+              }
+            });
+          });
+        },
+
+        // Terminal toggle
+        initTerminal() {
+          document.getElementById('terminalToggle')?.addEventListener('click', () => {
+            if (typeof toggleTerminal === 'function') {
+              toggleTerminal();
+            }
+          });
+        },
+
+        // Theme toggle
+        initTheme() {
+          document.getElementById('themeToggle')?.addEventListener('click', async () => {
+            const isLight = !document.documentElement.classList.contains('light');
+            document.documentElement.classList.toggle('light', isLight);
+            await fetch('/api/theme', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ theme: isLight ? 'light' : 'dark' })
+            });
+            showToast(`Theme: ${isLight ? 'Light' : 'Dark'}`, 'success', 2000);
+          });
+        },
+
+        // Initialize all
+        init() {
+          this.initDropdowns();
+          this.initTabs();
+          this.initTerminal();
+          this.initTheme();
+        }
+      };
+
+      v3.init();
+
+      // Legacy: Toast on scenario runs
+      const originalRunScenario = runScenario;
+      window.runScenario = async (name) => {
+        showToast(`Running scenario: ${name}...`, 'info', 3000);
+        try {
+          await originalRunScenario(name);
+          showToast(`Scenario ${name} completed!`, 'success', 3000);
+        } catch {
+          showToast(`Scenario ${name} failed`, 'error', 5000);
+        }
+      };
+
+      const originalApprove = approveNow;
+      window.approveNow = async () => {
+        try {
+          await originalApprove();
+          showToast('Approval granted!', 'success', 2000);
+        } catch {
+          showToast('Approval failed', 'error', 4000);
+        }
+      };
+
+      // Initialize terminal + panels
+      if (typeof initTerminalPanel !== 'undefined') {
+        initTerminalPanel();
+      }
+    </script>
+  </body>
+</html>
