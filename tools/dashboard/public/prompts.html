@@ -26,7 +26,7 @@
           <div class="kv"><label class="small">Model</label><div><input id="model" class="pill" placeholder="router/claude/gpt..."/></div></div>
           <div class="kv"><label class="small">Prompt</label><div><textarea id="body" rows="10" style="width:100%"></textarea></div></div>
           <div class="kv"><label class="small">Optimization idea</label><div><input id="opt" class="pill" placeholder="What to improve"/></div></div>
-          <div class="row" style="gap:8px;justify-content:flex-end"><button id="run" class="pill">Generate response</button></div>
+          <div class="row" style="gap:8px;justify-content:flex-end"><button id="runTerminal" class="pill" title="Execute prompt in terminal">▶ Run in Terminal</button><button id="run" class="pill">Generate response</button></div>
         </div>
         <div class="card">
           <div class="row" style="justify-content:space-between;align-items:center"><span>Response</span></div>
@@ -44,6 +44,7 @@
       document.getElementById('save').onclick = async ()=>{ const title = titleEl.value.trim(); const body = bodyEl.value; const tags = (document.getElementById('tags').value||'').split(',').map(s=>s.trim()).filter(Boolean); const notes = document.getElementById('notes').value||''; await fetch('/api/prompts/save',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, body, tags, notes }) }); refresh(); };
       const titleEl = document.getElementById('title'); const bodyEl = document.getElementById('body');
       document.getElementById('run').onclick = async ()=>{ const body = bodyEl.value; const model = document.getElementById('model').value||'router'; const optimizeIdea = document.getElementById('opt').value||''; const j = await (await fetch('/api/prompts/run',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ body, model, optimizeIdea }) })).json(); document.getElementById('out').textContent = j.output||''; refresh(); };
+      document.getElementById('runTerminal').onclick = ()=>{ const cmd = bodyEl.value.trim(); if(!cmd){ alert('Enter a command in the Prompt field first'); return; } if(window.executeInTerminal){ window.executeInTerminal(cmd); } else { alert('Terminal not loaded. Click the Terminal button in the header first.'); } };
       refresh();
     </script>
   </body>

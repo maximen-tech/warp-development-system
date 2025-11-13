@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import chokidar from 'chokidar';
 import { spawn } from 'child_process';
+import { WebSocketServer } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -822,8 +823,101 @@ app.post('/api/prompts/save', (req,res)=>{ try{ const { title, body, tags, notes
 app.post('/api/prompts/run', (req,res)=>{ try{ const { id, body, model, optimizeIdea } = req.body||{}; const promptText = body||''; const out = `[stub:${model||'router'}] ${promptText.slice(0,200)}\nSuggestion: ${optimizeIdea||''}`; const now=Date.now()/1000; const evReq = { ts: now, kind:'agent_request', status:'ok', agent:'prompt_factory', data:{ model:model||'router', prompt: promptText.slice(0,200)} }; const evRes = { ts: now+0.05, kind:'agent_response', status:'ok', agent:'prompt_factory', data:{ output: out } }; fs.appendFileSync(eventsFile, JSON.stringify(evReq)+'\n','utf-8'); fs.appendFileSync(eventsFile, JSON.stringify(evRes)+'\n','utf-8'); fs.appendFileSync(promptLogFile, JSON.stringify({ kind:'prompt_run', ts: now, id: id||null, body: promptText, model: model||null, optimizeIdea: optimizeIdea||null, output: out })+'\n','utf-8'); res.json({ ok:true, output: out }); }catch(e){ res.status(500).json({ error:String(e) }); } });
 app.get('/api/prompts/export', (req,res)=>{ try{ const fmt=String(req.query.format||'json'); const lines = fs.existsSync(promptLogFile)? fs.readFileSync(promptLogFile,'utf-8').trim().split('\n').filter(Boolean).map(l=>JSON.parse(l)) : []; if(fmt==='csv'){ const rows=['ts,kind,id,title,tags']; for(const r of lines){ rows.push(`${r.ts||''},${r.kind||''},${r.id||''},"${(r.title||'').replace(/"/g,'\"')}","${(Array.isArray(r.tags)?r.tags.join('|'):'').replace(/"/g,'\"')}"`);} res.setHeader('Content-Type','text/csv'); return res.send(rows.join('\n')); } res.json({ entries: lines }); }catch(e){ res.status(500).json({ error:String(e) }); } });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
   if (!fs.existsSync(eventsFile)) fs.writeFileSync(eventsFile, '', 'utf-8');
   console.log(`[dashboard] listening on http://localhost:${PORT}`);
+});
+
+// WebSocket server for terminal streaming
+const wss = new WebSocketServer({ noServer: true });
+const terminalSessions = new Map();
+
+server.on('upgrade', (request, socket, head) => {
+  if (request.url === '/terminal-ws') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+wss.on('connection', (ws) => {
+  const sessionId = Math.random().toString(36).slice(2);
+  console.log(`[terminal-ws] client connected: ${sessionId}`);
+  
+  // Send session ID
+  ws.send(JSON.stringify({ type: 'session', sessionId }));
+  
+  // Create persistent shell session (node-pty would be better, but spawn works for MVP)
+  let currentProcess = null;
+  
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      
+      if (msg.type === 'command' && msg.data) {
+        const cmd = msg.data.trim();
+        if (!cmd) return;
+        
+        // Log command
+        const append = (obj) => {
+          const line = JSON.stringify({ ts: Date.now() / 1000, ...obj });
+          fs.appendFileSync(termLogFile, line + '\n', 'utf-8');
+        };
+        append({ kind: 'term_start', cmd, sessionId });
+        
+        // Execute command
+        const shell = process.platform === 'win32' ? 'pwsh' : 'bash';
+        const args = process.platform === 'win32' 
+          ? ['-NoLogo', '-NoProfile', '-Command', cmd]
+          : ['-c', cmd];
+        
+        currentProcess = spawn(shell, args, {
+          cwd: repoRoot,
+          env: process.env
+        });
+        
+        currentProcess.stdout.on('data', (chunk) => {
+          const output = chunk.toString();
+          ws.send(JSON.stringify({ type: 'output', data: output }));
+          append({ kind: 'term', stream: 'stdout', data: output, sessionId });
+        });
+        
+        currentProcess.stderr.on('data', (chunk) => {
+          const output = chunk.toString();
+          ws.send(JSON.stringify({ type: 'output', data: output }));
+          append({ kind: 'term', stream: 'stderr', data: output, sessionId });
+        });
+        
+        currentProcess.on('close', (code) => {
+          ws.send(JSON.stringify({ type: 'output', data: `\r\n\x1b[36m$\x1b[0m ` }));
+          append({ kind: 'term_end', code, sessionId });
+          currentProcess = null;
+        });
+        
+        currentProcess.on('error', (err) => {
+          ws.send(JSON.stringify({ type: 'output', data: `\r\n\x1b[31mError: ${err.message}\x1b[0m\r\n` }));
+          append({ kind: 'term_error', error: err.message, sessionId });
+        });
+      }
+    } catch (err) {
+      console.error('[terminal-ws] message error:', err);
+    }
+  });
+  
+  ws.on('close', () => {
+    console.log(`[terminal-ws] client disconnected: ${sessionId}`);
+    if (currentProcess) {
+      currentProcess.kill();
+    }
+    terminalSessions.delete(sessionId);
+  });
+  
+  ws.on('error', (err) => {
+    console.error('[terminal-ws] error:', err);
+  });
+  
+  terminalSessions.set(sessionId, { ws, currentProcess: null });
 });
