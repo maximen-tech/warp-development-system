@@ -186,7 +186,7 @@ Examples:
         const data = await response.json();
         PromptFactory.projectContext = data.project;
       } else {
-        PromptFactory.projectContext = { name: 'Warp Development System', stack: ['Node.js', 'JavaScript'], path: process.cwd() };
+        PromptFactory.projectContext = { name: 'Warp Development System', stack: ['Node.js', 'JavaScript'], path: '' };
       }
     } catch (error) {
       console.error('[factory] Load project context failed:', error);

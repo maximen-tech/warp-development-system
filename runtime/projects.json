@@ -5,9 +5,13 @@
       "name": "Warp Development System",
       "path": "C:\\Users\\maxco\\Projects\\warp-development-system",
       "status": "active",
-      "tech_stack": ["Node.js", "JavaScript", "Express"],
+      "tech_stack": [
+        "Node.js",
+        "JavaScript",
+        "Express"
+      ],
       "created_at": 1705132800000,
-      "last_accessed": 1705132800000,
+      "last_accessed": 1763067609561,
       "optimization_level": 95,
       "config": {
         "agents_count": 5,
@@ -24,6 +28,6 @@
   ],
   "meta": {
     "version": "1.0.0",
-    "last_updated": 1705132800000
+    "last_updated": 1763067609561
   }
 }

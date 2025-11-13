@@ -235,6 +235,10 @@
     </div>
 
     <script>
+      const activeProject = (function(){ try{ return JSON.parse(localStorage.getItem('active_project')||'null'); }catch{ return null; } })();
+      const activeProjectPath = activeProject && activeProject.path || '';
+      const activeProjectId = activeProject && activeProject.id || '';
+
       const S = { agents: [], skills: [], status:{}, filter:'', timers:{}, sortBy: (localStorage.getItem('agents.sortBy')||'manual'), autoExpandErr: (localStorage.getItem('agents.autoExpandErr')==='1'), errSeen: {}, lastAutoExpandTs: 0, importBatch: null, importErrors: {} };
       const qs = (s,el=document)=>el.querySelector(s);
       const qsa = (s,el=document)=>Array.from(el.querySelectorAll(s));
@@ -245,7 +249,8 @@
       function closeModal(id){ const m = qs(id); if(m){ if(m.classList.contains('modal-overlay')){ m.classList.remove('show'); } else { m.style.display='none'; } } }
 
       async function loadAll(){
-        const list = await (await fetch('/api/agents/list')).json();
+        const qp = activeProjectPath ? `?projectPath=${encodeURIComponent(activeProjectPath)}` : '';
+        const list = await (await fetch('/api/agents/list'+qp)).json();
         S.agents = list.agents||[]; S.skills = list.skills||[]; await refreshStatus(); render();
       }
       async function refreshStatus(){ try{ S.status = (await (await fetch('/api/agents/status')).json()).status || {}; } catch{ S.status = {}; } }
@@ -648,7 +653,7 @@
       async function validateAndMaybeSave(silent){
         const ok = await validateLive(); if(!ok && !silent){ if(window.showToast) showToast('Please fix validation errors', 'warning'); return; }
         if(silent) return;
-        const res = await fetch('/api/agents/save',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents:S.agents, skills:S.skills, reason: (S.saveReason||null) }) }); S.saveReason=null;
+        const res = await fetch('/api/agents/save',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents:S.agents, skills:S.skills, reason: (S.saveReason||null), projectPath: activeProjectPath||'' }) }); S.saveReason=null;
         const j = await res.json(); if(!j.ok){ if(window.showToast) showToast('Save failed', 'error'); return; }
         await fetch('/api/agents/reload',{ method:'POST' });
         showModal(false); await loadAll();
@@ -672,7 +677,7 @@
         await validateAndMaybeSave(false);
       }
 
-      async function testAgent(a){ const prompt = window.prompt('Test prompt','Hello'); if(prompt===null) return; try{ await fetch('/api/agents/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent:a.name, prompt }) }); if(window.showToast) showToast('Test triggered successfully', 'success', 3000, 'Agent Test'); }catch(err){ if(window.showToast) showToast('Test failed: '+err.message, 'error'); } }
+      async function testAgent(a){ const prompt = window.prompt('Test prompt','Hello'); if(prompt===null) return; try{ const res = await fetch('/api/agents/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent:a.name, prompt, projectPath: activeProjectPath||'' }) }); const j = await res.json(); if(window.showToast) showToast('Test triggered successfully', 'success', 3000, 'Agent Test'); if(j && j.output){ console.log('[agent-test]', j.output); } }catch(err){ if(window.showToast) showToast('Test failed: '+err.message, 'error'); } }
       async function expandAgent(card, a){
         openModal('#detailsModal');
         qs('#detailsTitle').textContent = `Agent: ${a.name}`;
@@ -703,10 +708,12 @@
       qs('#historyUI').onclick = async ()=>{ openModal('#diffModal'); try{ const h = await (await fetch('/api/agents/history')).json(); const sel = qs('#backupSelect'); sel.innerHTML=''; for(const b of (h.backups||[])){ const o=document.createElement('option'); o.value=b.name; o.textContent = `${new Date(b.ts).toLocaleString()} · ${b.name}`; sel.appendChild(o); } }catch{} };
       qs('#loadDiff').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; const d = await (await fetch(`/api/agents/diff?name=${encodeURIComponent(name)}`)).json(); qs('#diffOut').textContent = (d.agentsDiff||'') + (d.skillsDiff? ('\n'+d.skillsDiff) : ''); const txt = await (await fetch(`/api/agents/backup-content?name=${encodeURIComponent(name)}`)).text(); const isAgents = name.startsWith('agents'); const curAgents = isAgents ? (await (await fetch('/api/agents')).json()).agents : ''; const curSkills = isAgents ? '' : (await (await fetch('/api/agents')).json()).skills; qs('#diffBefore').textContent = txt; qs('#diffAfter').textContent = isAgents? curAgents : curSkills; };
       qs('#doRollback').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; if(!confirm('Rollback to '+name+'?')) return; await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names:[name] }) }); closeModal('#diffModal'); await loadAll(); };
-      qs('#exportAgents').onclick = async ()=>{ const j = await (await fetch('/api/agents/export?format=json')).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_export.json'; a.click(); };
+      qs('#exportAgents').onclick = async ()=>{ const qp = activeProjectPath? `?format=json&projectPath=${encodeURIComponent(activeProjectPath)}` : '?format=json'; const j = await (await fetch('/api/agents/export'+qp)).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_export.json'; a.click(); };
       qs('#bulkExportJson').onclick = async ()=>{
         const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.agent-card')?.dataset?.name).filter(Boolean);
-        const url = '/api/agents/export?format=json'+(selected.length? `&names=${encodeURIComponent(selected.join(','))}`:'');
+        let url = '/api/agents/export?format=json';
+        if(selected.length) url += `&names=${encodeURIComponent(selected.join(','))}`;
+        if(activeProjectPath) url += `&projectPath=${encodeURIComponent(activeProjectPath)}`;
         const j = await (await fetch(url)).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_selected.json'; a.click();
       };
       qs('#bulkImport').onchange = async (e)=>{ const file = e.target.files[0]; if(!file) return; openModal('#importModal'); const status = qs('#importStatus'); const table = qs('#importTable'); status.textContent='Parsing...'; let payload=null; try{ const textRaw = await file.text(); const text = textRaw.replace(/\uFEFF/, ''); // strip BOM
@@ -729,9 +736,9 @@
           qs('#selAllSkills')?.addEventListener('change', (ev)=>{ const on = ev.target.checked; qsa('[data-kind=skill]', table).forEach(cb=> cb.checked=on); validateSel(); });
           await validateSel();
           qs('#applyImport').onclick = async ()=>{ const sel = getSelection(); // dry-run
-            const dry = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:true }) })).json(); if(!dry.ok){ status.textContent='Errors: '+JSON.stringify(dry.errors); return; }
+            const dry = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:true, projectPath: activeProjectPath||'' }) })).json(); if(!dry.ok){ status.textContent='Errors: '+JSON.stringify(dry.errors); return; }
             const prog = document.getElementById('importProgress'); let v=0; prog.value=0; const t = setInterval(()=>{ v=Math.min(100, v+10); prog.value=v; }, 200);
-            const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:false }) })).json(); clearInterval(t); prog.value=100; if(!res.ok){ status.textContent='Apply failed'; return; }
+            const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:false, projectPath: activeProjectPath||'' }) })).json(); clearInterval(t); prog.value=100; if(!res.ok){ status.textContent='Apply failed'; return; }
             closeModal('#importModal'); await loadAll();
           };
         } catch{ status.textContent='Invalid file'; } };
@@ -745,7 +752,7 @@
           const dry = await (await fetch('/api/agents/validate-json',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: S.agents, skills: [...S.skills, ...sel] })})).json(); if(!dry.ok){ status.textContent='Validation errors: '+(dry.errors||[]).map(e=>e.file).join(', '); return; }
           const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ skills: sel, partial:true, dryRun:false }) })).json(); if(!res.ok){ status.textContent = 'Import failed'; return; } closeModal('#marketModal'); await loadAll(); };
         }catch{ status.textContent='Fetch failed'; } };
-      qs('#bulkDelete').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.agent-card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); if(!confirm('Delete '+selected.length+' agents?')) return; for(const name of selected){ await fetch(`/api/agents/item?name=${encodeURIComponent(name)}`,{ method:'DELETE' }); } await loadAll(); };
+      qs('#bulkDelete').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.agent-card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); if(!confirm('Delete '+selected.length+' agents?')) return; for(const name of selected){ const qp = activeProjectPath? `?name=${encodeURIComponent(name)}&projectPath=${encodeURIComponent(activeProjectPath)}` : `?name=${encodeURIComponent(name)}`; await fetch(`/api/agents/item${qp}`,{ method:'DELETE' }); } await loadAll(); };
       qs('#bulkDuplicate').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.agent-card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); const list = S.agents.filter(a=>selected.includes(a.name)); for(const a of list){ const copy = JSON.parse(JSON.stringify(a)); copy.name = a.name+'-copy'; await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent: copy }) }); } await loadAll(); };
       qs('#closeModal').onclick = ()=> showModal(false);
       qs('#saveBtn').onclick = saveEdit;

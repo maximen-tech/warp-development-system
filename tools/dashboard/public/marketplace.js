@@ -7,6 +7,8 @@ class Marketplace {
     this.installQueue = [];
     this.selectedItem = null;
     this.showingInstalled = false;
+    const activeProject = (function(){ try{ return JSON.parse(localStorage.getItem('active_project')||'null'); }catch{ return null; } })();
+    this.activeProjectId = activeProject && activeProject.id || null;
     this.init();
   }
 
@@ -254,7 +256,7 @@ class Marketplace {
       const response = await fetch('/api/marketplace/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
+        body: JSON.stringify({ id, projectId: this.activeProjectId || null })
       });
 
       if (response.ok) {

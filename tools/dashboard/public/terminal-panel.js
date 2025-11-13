@@ -15,6 +15,7 @@
     favorites: JSON.parse(localStorage.getItem('terminal:favorites') || '[]'),
     currentCommand: '',
     sessionId: null,
+    cwd: null,
   };
 
   // Initialize terminal panel
@@ -77,6 +78,11 @@
         toggleTerminal();
       }
     });
+  };
+
+  // Allow external callers (context switcher) to set working directory per project
+  window.setTerminalCwd = function(cwd) {
+    TerminalPanel.cwd = cwd || null;
   };
 
   // Toggle terminal panel visibility
@@ -230,6 +236,9 @@
         } else if (msg.type === 'session' && msg.sessionId) {
           TerminalPanel.sessionId = msg.sessionId;
           localStorage.setItem('terminal:sessionId', msg.sessionId);
+        } else if (msg.type === 'command_complete' && window.captureTerminalOutput) {
+          // Bridge terminal output into Prompt Factory
+          window.captureTerminalOutput(msg.output || '', msg.command || '');
         }
       } catch (err) {
         // Raw text output (fallback)
@@ -283,7 +292,8 @@
     // Send via WebSocket
     TerminalPanel.socket.send(JSON.stringify({
       type: 'command',
-      data: command + '\n'
+      data: command + '\n',
+      cwd: TerminalPanel.cwd || null,
     }));
     
     // Save to history
