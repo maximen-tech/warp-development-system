@@ -152,8 +152,12 @@ app.get('/api/artifact/download/:name', (req, res) => {
 function runScenario(script) {
   const scriptPath = path.join(__dirname, '../../tools/e2e', script);
   const cmd = process.platform === 'win32' ? 'python' : 'python3';
-  const child = spawn(cmd, [scriptPath], { stdio: 'ignore', detached: true });
-  child.unref();
+  const logPath = path.join(runtimeDir, 'console.log');
+  const out = fs.createWriteStream(logPath, { flags: 'a' });
+  const child = spawn(cmd, [scriptPath], { stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stdout.on('data', (d) => out.write(`[stdout] ${String(d)}`));
+  child.stderr.on('data', (d) => out.write(`[stderr] ${String(d)}`));
+  child.on('close', (code) => { out.write(`[close] code=${code}\n`); out.end(); });
 }
 app.post('/api/run/:name', (req, res) => {
   const name = req.params.name;
@@ -199,6 +203,27 @@ app.get('/api/runs/export/:idx', (req, res) => {
     res.setHeader('Content-Type', 'text/plain');
     res.send(slice);
   } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Console tail
+app.get('/api/console', (req, res) => {
+  try {
+    const logPath = path.join(runtimeDir, 'console.log');
+    if (!fs.existsSync(logPath)) return res.json({ content: '' });
+    const size = fs.statSync(logPath).size; const start = Math.max(0, size - 1024 * 64);
+    const fd = fs.openSync(logPath, 'r'); const buf = Buffer.alloc(size - start);
+    fs.readSync(fd, buf, 0, buf.length, start); fs.closeSync(fd);
+    res.json({ content: buf.toString('utf-8') });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Theme persist
+const themeFile = path.join(runtimeDir, 'theme.txt');
+app.get('/api/theme', (_req, res) => {
+  try { const t = fs.existsSync(themeFile) ? fs.readFileSync(themeFile, 'utf-8').trim() : 'dark'; res.json({ theme: t || 'dark' }); } catch { res.json({ theme: 'dark' }); }
+});
+app.post('/api/theme', (req, res) => {
+  try { const t = (req.body || {}).theme || 'dark'; fs.writeFileSync(themeFile, t, 'utf-8'); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
 app.listen(PORT, () => {
