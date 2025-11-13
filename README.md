@@ -48,4 +48,15 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
   - Bash: `bash tools/e2e/run_all.sh`
 - Outputs:
   - Live events: `runtime/events.jsonl` (dashboard streams this file)
-  - Snapshots: `runtime/scenarios/happy.jsonl`, `runtime/scenarios/escalation.jsonl`
+  - Snapshots: `runtime/scenarios/happy.jsonl`, `runtime/scenarios/escalation.jsonl`, `runtime/scenarios/edge.jsonl`
+
+## Events → UI mapping (user impact)
+| Event kind            | UI element                                   | User impact |
+|-----------------------|-----------------------------------------------|-------------|
+| start                 | header entry                                 | run begun   |
+| transition            | row with phase badge                          | state moved |
+| agent_request/response| row with agent + usage                        | model call  |
+| action_proposed       | row with command + approval badge (auto/manual) | requires attention if manual |
+| validation_summary    | row with summary bullets count                | ready to review |
+| end                   | row with green status                         | run finished |
+| error                 | red row with error text                       | investigate; retries may apply |
