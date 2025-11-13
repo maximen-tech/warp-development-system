@@ -60,6 +60,14 @@ def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
         actions.append(risky)
         log_event("action_proposed", {"cmd": risky["cmd"], "approval": level, "paths": risky.get("paths")}, phase="execute")
 
+    # Optional: add multiple risky actions for stress tests
+    if (state.get("context") or {}).get("simulate_many_risky"):
+        for i in range(3):
+            r = {"name": f"infra-apply-{i}", "cmd": ["bash", "echo", "apply", str(i)], "paths": [f"infrastructure/prod/apply{i}.tf"], "dry_run": True}
+            r["approval"] = _needs_approval(r["paths"])
+            actions.append(r)
+            log_event("action_proposed", {"cmd": r["cmd"], "approval": r["approval"], "paths": r.get("paths")}, phase="execute")
+
     proposed = {"posix": actions, "windows": actions_ps}
     # Pattern 7: Approval gate pyramid (simulation)
     approvals = []

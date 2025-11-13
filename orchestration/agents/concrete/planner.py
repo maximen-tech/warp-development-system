@@ -11,7 +11,7 @@ class Planner:
     def run(self, goal: str, context_hint: List[str]) -> Dict[str, Any]:
         router = ModelRouter()
         client = router.get_client(self.profile)
-        system = "You are a planning agent. Output a bullet list of 3-7 steps to achieve the goal."
+        system = "You are a planning agent. Output a bullet list of 3-7 steps to achieve the goal. Each line starts with '- '."
         prompt = f"Goal: {goal}\nContext: {', '.join(context_hint or [])}"
         log_event("agent_request", {"profile": self.profile, "goal": goal}, agent="planner", phase="plan")
         result = client.generate(system, prompt) if client else {"text": "- Draft plan (fallback)", "usage": {}}

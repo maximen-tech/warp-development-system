@@ -23,3 +23,8 @@ Outputs
 - plan.md in runtime/ with ordered steps
 - actions proposed with minimal patches
 - validation summary mirroring CI checks
+
+Agent output contracts (normalized)
+- planner: lines starting with "- " representing steps
+- executor: strict JSON { "posix": string[][], "windows": string[][] }
+- validator: exactly 3 lines starting with "- " representing summary bullets

@@ -11,7 +11,7 @@ class Validator:
     def run(self, summary: Dict[str, Any]) -> Dict[str, Any]:
         router = ModelRouter()
         client = router.get_client(self.profile)
-        system = "You are a validator that summarizes validation checks and risks in 3 bullet points."
+        system = "You are a validator that summarizes validation checks and risks in exactly 3 bullet points."
         prompt = str(summary)
         log_event("agent_request", {"profile": self.profile}, agent="validator", phase="validate")
         result = client.generate(system, prompt) if client else {"text": "- Tools OK\n- Risks low\n- Proceed", "usage": {}}
