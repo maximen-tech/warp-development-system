@@ -243,12 +243,161 @@ function clearFilters() {
   projectsHub.clearFilters();
 }
 
-function showCreateModal() {
-  alert('Create Project modal (Phase 2 implementation)');
+async function showCreateModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <header class="modal-header">
+        <h2>Create New Project</h2>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </header>
+      <form id="createProjectForm" class="modal-form">
+        <div class="form-group">
+          <label>Project Name</label>
+          <input type="text" id="projectName" required placeholder="my-awesome-app" />
+        </div>
+        <div class="form-group">
+          <label>Template</label>
+          <select id="projectTemplate" required>
+            <option value="">Select template...</option>
+            <option value="nextjs">Next.js + TypeScript + Tailwind</option>
+            <option value="express">Express.js API</option>
+            <option value="python">Python FastAPI</option>
+            <option value="blank">Blank Project</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="button secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="button primary">Create Project</button>
+        </div>
+      </form>
+      <div id="createProgress" class="modal-progress" style="display:none;">
+        <div class="spinner"></div>
+        <p>Creating project...</p>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  document.getElementById('createProjectForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('projectName').value;
+    const template = document.getElementById('projectTemplate').value;
+    
+    document.getElementById('createProjectForm').style.display = 'none';
+    document.getElementById('createProgress').style.display = 'block';
+    
+    try {
+      const response = await fetch('/api/projects/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, template })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        projectsHub.showSuccess(`Project "${name}" created!`);
+        closeModal();
+        window.location.href = `/projects.html`;
+      } else {
+        throw new Error(data.error || 'Creation failed');
+      }
+    } catch (e) {
+      projectsHub.showError(e.message);
+      document.getElementById('createProjectForm').style.display = 'block';
+      document.getElementById('createProgress').style.display = 'none';
+    }
+  });
 }
 
-function showImportModal() {
-  alert('Import Project modal (Phase 3 implementation)');
+async function showImportModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <header class="modal-header">
+        <h2>Import Existing Project</h2>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </header>
+      <form id="importProjectForm" class="modal-form">
+        <div class="form-group">
+          <label>Import Method</label>
+          <div class="radio-group">
+            <label><input type="radio" name="importType" value="url" checked /> Git URL</label>
+            <label><input type="radio" name="importType" value="path" /> Local Path</label>
+          </div>
+        </div>
+        <div class="form-group" id="urlGroup">
+          <label>Repository URL</label>
+          <input type="text" id="repoUrl" placeholder="https://github.com/user/repo.git" />
+        </div>
+        <div class="form-group" id="pathGroup" style="display:none;">
+          <label>Project Path</label>
+          <input type="text" id="projectPath" placeholder="C:\\Users\\you\\project" />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="button secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="button primary">Import & Optimize</button>
+        </div>
+      </form>
+      <div id="importProgress" class="modal-progress" style="display:none;">
+        <div class="spinner"></div>
+        <p>Importing and analyzing...</p>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  document.querySelectorAll('input[name="importType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      document.getElementById('urlGroup').style.display = e.target.value === 'url' ? 'block' : 'none';
+      document.getElementById('pathGroup').style.display = e.target.value === 'path' ? 'block' : 'none';
+    });
+  });
+  
+  document.getElementById('importProjectForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const type = document.querySelector('input[name="importType"]:checked').value;
+    const source = type === 'url' 
+      ? document.getElementById('repoUrl').value 
+      : document.getElementById('projectPath').value;
+    
+    if (!source) {
+      projectsHub.showError('Please provide a source');
+      return;
+    }
+    
+    document.getElementById('importProjectForm').style.display = 'none';
+    document.getElementById('importProgress').style.display = 'block';
+    
+    try {
+      const response = await fetch('/api/projects/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, type })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        projectsHub.showSuccess(`Project imported! Optimization: ${data.project.optimization_level}%`);
+        closeModal();
+        window.location.href = `/projects.html`;
+      } else {
+        throw new Error(data.error || 'Import failed');
+      }
+    } catch (e) {
+      projectsHub.showError(e.message);
+      document.getElementById('importProjectForm').style.display = 'block';
+      document.getElementById('importProgress').style.display = 'none';
+    }
+  });
+}
+
+function closeModal() {
+  document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
 }
 
 // Initialize

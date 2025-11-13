@@ -17,6 +17,7 @@
     <script src="/terminal-panel.js"></script>
     <script src="/notifications.js"></script>
     <script src="/collab.js"></script>
+    <script src="/context-switcher.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-core.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-diff.min.js"></script>
@@ -27,7 +28,15 @@
   <body>
     <a href="#main" class="skip-nav">Skip to main content</a>
     <header role="banner" class="header">
-      <h1 class="header__title">Warp Dashboard</h1>
+      <div class="header__brand">
+        <h1 class="header__title">Warp Dashboard</h1>
+        <div class="project-selector">
+          <label for="activeProject">Project:</label>
+          <select id="activeProject" class="project-dropdown">
+            <option value="">No project</option>
+          </select>
+        </div>
+      </div>
       <nav class="header__nav" role="navigation" aria-label="Main navigation">
         <a class="nav-link" href="/projects.html">🏗️ Projects</a>
         <a class="nav-link" href="/agents.html">Agents</a>

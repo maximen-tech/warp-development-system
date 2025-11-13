@@ -2,7 +2,11 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import chokidar from 'chokidar';
+import crypto from 'crypto';
+import { execSync } from 'child_process';
+import { scaffoldProject, getAvailableTemplates } from './lib/scaffolder.js';
+import { analyzeCodebase } from './lib/analyzer.js';
+import { optimizeProject } from './lib/optimizer.js';
 import { spawn } from 'child_process';
 import { WebSocketServer } from 'ws';
 
@@ -1058,6 +1062,120 @@ app.delete('/api/projects/:id', (req, res) => {
     saveProjects(filtered);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Create/Import/Optimize workflows
+const PROJECTS_BASE = path.join(process.cwd(), '../../');
+
+app.get('/api/projects/templates', (req, res) => {
+  res.json({ templates: getAvailableTemplates() });
+});
+
+app.post('/api/projects/create', async (req, res) => {
+  try {
+    const { name, template } = req.body;
+    if (!name || !template) return res.status(400).json({ error: 'Name and template required' });
+
+    const result = await scaffoldProject({ name, template, basePath: PROJECTS_BASE });
+    const analysis = await analyzeCodebase(result.path);
+    const config = await optimizeProject(result.path, analysis);
+
+    const project = {
+      id: crypto.randomUUID(),
+      name,
+      path: result.path,
+      status: 'active',
+      tech_stack: result.stack,
+      created_at: new Date().toISOString(),
+      last_accessed: new Date().toISOString(),
+      optimization_level: config.optimization_level,
+      config,
+      stats: analysis.stats
+    };
+
+    const projects = loadProjects();
+    projects.push(project);
+    saveProjects(projects);
+
+    res.json({ success: true, project });
+  } catch (e) {
+    console.error('Create project error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/projects/import', async (req, res) => {
+  try {
+    const { source, type } = req.body;
+    if (!source) return res.status(400).json({ error: 'Source required' });
+
+    let projectPath, projectName;
+
+    if (type === 'url') {
+      projectName = source.split('/').pop().replace('.git', '');
+      projectPath = path.join(PROJECTS_BASE, projectName);
+      execSync(`git clone ${source} "${projectPath}"`, { stdio: 'inherit' });
+    } else {
+      projectPath = source;
+      projectName = path.basename(projectPath);
+      try { await fs.promises.access(projectPath); }
+      catch { return res.status(400).json({ error: 'Path does not exist' }); }
+    }
+
+    const analysis = await analyzeCodebase(projectPath);
+    const config = await optimizeProject(projectPath, analysis);
+
+    const project = {
+      id: crypto.randomUUID(),
+      name: projectName,
+      path: projectPath,
+      status: 'active',
+      tech_stack: analysis.stack,
+      created_at: new Date().toISOString(),
+      last_accessed: new Date().toISOString(),
+      optimization_level: config.optimization_level,
+      config,
+      stats: analysis.stats
+    };
+
+    const projects = loadProjects();
+    projects.push(project);
+    saveProjects(projects);
+
+    res.json({ success: true, project });
+  } catch (e) {
+    console.error('Import project error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/projects/:id/health', async (req, res) => {
+  try {
+    const projects = loadProjects();
+    const project = projects.find(p => p.id === req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const analysis = await analyzeCodebase(project.path);
+    res.json({ health: analysis.health });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/projects/:id/optimize', async (req, res) => {
+  try {
+    const projects = loadProjects();
+    const project = projects.find(p => p.id === req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const analysis = await analyzeCodebase(project.path);
+    const config = await optimizeProject(project.path, analysis);
+
+    project.config = config;
+    project.optimization_level = config.optimization_level;
+    project.stats = analysis.stats;
+
+    saveProjects(projects);
+    res.json({ success: true, project });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const server = app.listen(PORT, () => {
