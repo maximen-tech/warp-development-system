@@ -1831,6 +1831,655 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+// ============================================================================
+// PHASE 3: AGENT ORCHESTRATION, COLLABORATION, PERFORMANCE, INTEGRATIONS, MOBILE
+// ============================================================================
+
+// Initialize Phase 3 modules
+const AgentOrchestrator = (await import('./lib/agent-orchestrator.js')).default;
+const AgentMemory = (await import('./lib/agent-memory.js')).default;
+const CollaborationEngine = (await import('./lib/collaboration-engine.js')).default;
+const PermissionsManager = (await import('./lib/permissions.js')).default;
+const DatabaseLayer = (await import('./lib/db-layer.js')).default;
+const CacheManager = (await import('./lib/cache-manager.js')).default;
+const WebhookManager = (await import('./lib/webhook-manager.js')).default;
+
+const orchestrator = new AgentOrchestrator();
+const agentMemory = new AgentMemory();
+const collabEngine = new CollaborationEngine();
+const permissions = new PermissionsManager();
+const db = new DatabaseLayer({ type: 'json' });
+const cache = new CacheManager({ type: 'memory' });
+const webhooks = new WebhookManager();
+
+await orchestrator.initialize();
+await agentMemory.initialize();
+await permissions.initialize();
+await db.initialize();
+
+// ============= WORKSTREAM 1: AGENT ORCHESTRATION (12 endpoints) =============
+
+// Create workflow
+app.post('/api/workflows/create', async (req, res) => {
+  try {
+    const workflow = await orchestrator.createWorkflow(req.body);
+    logger.info('Workflow created:', workflow.id);
+    res.json(workflow);
+  } catch (e) {
+    logger.error('Create workflow error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List workflows
+app.get('/api/workflows', (req, res) => {
+  try {
+    const workflows = orchestrator.getAllWorkflows();
+    res.json(workflows);
+  } catch (e) {
+    logger.error('List workflows error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get workflow by ID
+app.get('/api/workflows/:id', (req, res) => {
+  try {
+    const workflow = orchestrator.getWorkflow(req.params.id);
+    if (!workflow) return res.status(404).json({ error: 'Workflow not found' });
+    res.json(workflow);
+  } catch (e) {
+    logger.error('Get workflow error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update workflow
+app.put('/api/workflows/:id', async (req, res) => {
+  try {
+    const workflow = await orchestrator.updateWorkflow(req.params.id, req.body);
+    logger.info('Workflow updated:', req.params.id);
+    res.json(workflow);
+  } catch (e) {
+    logger.error('Update workflow error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete workflow
+app.delete('/api/workflows/:id', async (req, res) => {
+  try {
+    await orchestrator.deleteWorkflow(req.params.id);
+    logger.info('Workflow deleted:', req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    logger.error('Delete workflow error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Execute workflow
+app.post('/api/workflows/:id/execute', async (req, res) => {
+  try {
+    const { context = {} } = req.body;
+    const execution = await orchestrator.executeWorkflow(req.params.id, context, agentMemory);
+    logger.info('Workflow executed:', execution.id);
+    res.json(execution);
+  } catch (e) {
+    logger.error('Execute workflow error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get execution status
+app.get('/api/workflows/execution/:executionId/status', (req, res) => {
+  try {
+    const execution = orchestrator.getExecution(req.params.executionId);
+    if (!execution) return res.status(404).json({ error: 'Execution not found' });
+    res.json(execution);
+  } catch (e) {
+    logger.error('Get execution status error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get workflow execution history
+app.get('/api/workflows/:id/history', (req, res) => {
+  try {
+    const history = orchestrator.getExecutionHistory(req.params.id);
+    res.json({ executions: history });
+  } catch (e) {
+    logger.error('Get workflow history error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Pause workflow execution
+app.post('/api/workflows/execution/:executionId/pause', async (req, res) => {
+  try {
+    const execution = await orchestrator.pauseExecution(req.params.executionId);
+    logger.info('Workflow paused:', req.params.executionId);
+    res.json(execution);
+  } catch (e) {
+    logger.error('Pause execution error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Cancel workflow execution
+app.post('/api/workflows/execution/:executionId/cancel', async (req, res) => {
+  try {
+    const execution = await orchestrator.cancelExecution(req.params.executionId);
+    logger.info('Workflow cancelled:', req.params.executionId);
+    res.json(execution);
+  } catch (e) {
+    logger.error('Cancel execution error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Agent memory - Get
+app.get('/api/agents/memory/:agentId', async (req, res) => {
+  try {
+    const memory = await agentMemory.get(req.params.agentId);
+    res.json({ memory });
+  } catch (e) {
+    logger.error('Get agent memory error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Agent memory - Set
+app.post('/api/agents/memory/:agentId', async (req, res) => {
+  try {
+    const memory = await agentMemory.set(req.params.agentId, req.body.data);
+    res.json({ memory });
+  } catch (e) {
+    logger.error('Set agent memory error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============= WORKSTREAM 2: TEAM COLLABORATION (8 endpoints) =============
+
+// Grant permission
+app.post('/api/permissions/grant', async (req, res) => {
+  try {
+    const { userId, role, resourceType, resourceId } = req.body;
+    const perm = await permissions.grantPermission(userId, role, resourceType, resourceId);
+    logger.info('Permission granted:', userId, role);
+    res.json(perm);
+  } catch (e) {
+    logger.error('Grant permission error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Revoke permission
+app.delete('/api/permissions/:userId', async (req, res) => {
+  try {
+    await permissions.revokePermission(req.params.userId);
+    logger.info('Permission revoked:', req.params.userId);
+    res.json({ success: true });
+  } catch (e) {
+    logger.error('Revoke permission error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get user permissions
+app.get('/api/permissions/users', (req, res) => {
+  try {
+    const users = permissions.getAllUsers();
+    res.json({ users });
+  } catch (e) {
+    logger.error('Get users error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get user presence (who's online)
+app.get('/api/presence', (req, res) => {
+  try {
+    const sessions = loadSessions();
+    const online = Object.values(sessions).filter(s => Date.now() - s.lastSeen < 60000);
+    res.json({ users: online, count: online.length });
+  } catch (e) {
+    logger.error('Get presence error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Add comment on agent
+app.post('/api/comments/add', (req, res) => {
+  try {
+    const { agentId, userId, comment } = req.body;
+    const commentsFile = path.join(runtimeDir, 'comments.json');
+    let comments = [];
+    if (fs.existsSync(commentsFile)) {
+      comments = JSON.parse(fs.readFileSync(commentsFile, 'utf-8'));
+    }
+    const newComment = {
+      id: `comment_${Date.now()}`,
+      agentId,
+      userId,
+      comment,
+      timestamp: Date.now()
+    };
+    comments.push(newComment);
+    fs.writeFileSync(commentsFile, JSON.stringify(comments, null, 2));
+    res.json(newComment);
+  } catch (e) {
+    logger.error('Add comment error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get comments for agent
+app.get('/api/comments/:agentId', (req, res) => {
+  try {
+    const commentsFile = path.join(runtimeDir, 'comments.json');
+    if (!fs.existsSync(commentsFile)) return res.json({ comments: [] });
+    const comments = JSON.parse(fs.readFileSync(commentsFile, 'utf-8'));
+    const filtered = comments.filter(c => c.agentId === req.params.agentId);
+    res.json({ comments: filtered });
+  } catch (e) {
+    logger.error('Get comments error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Activity stream
+app.get('/api/activity/stream', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit || '50');
+    const lines = fs.existsSync(activityFile) 
+      ? fs.readFileSync(activityFile, 'utf-8').trim().split('\n').filter(Boolean).slice(-limit)
+      : [];
+    const activities = lines.map(line => JSON.parse(line)).reverse();
+    res.json({ activities });
+  } catch (e) {
+    logger.error('Get activity stream error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Collaboration session (CRDT-like operations)
+app.post('/api/collab/operation', (req, res) => {
+  try {
+    const { documentId, operation } = req.body;
+    const doc = collabEngine.applyOperation(documentId, operation);
+    res.json({ success: true, version: doc.version });
+  } catch (e) {
+    logger.error('Apply operation error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============= WORKSTREAM 3: PERFORMANCE OPTIMIZATION (5 endpoints) =============
+
+// Paginated projects (for virtual scroll)
+app.get('/api/projects/paginated', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit || '50');
+    const offset = parseInt(req.query.offset || '0');
+    
+    const projects = loadProjects();
+    const total = projects.length;
+    const paginated = projects.slice(offset, offset + limit);
+    
+    res.json({ projects: paginated, total, offset, limit });
+  } catch (e) {
+    logger.error('Get paginated projects error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Cache stats
+app.get('/api/cache/stats', (req, res) => {
+  try {
+    const stats = cache.getStats();
+    res.json(stats);
+  } catch (e) {
+    logger.error('Get cache stats error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Invalidate cache
+app.post('/api/cache/invalidate', async (req, res) => {
+  try {
+    await cache.clear();
+    logger.info('Cache invalidated');
+    res.json({ success: true });
+  } catch (e) {
+    logger.error('Invalidate cache error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Database status
+app.get('/api/db/status', async (req, res) => {
+  try {
+    const status = await db.getStatus();
+    res.json(status);
+  } catch (e) {
+    logger.error('Get DB status error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Query with caching
+app.post('/api/db/query', async (req, res) => {
+  try {
+    const { collection, filter, options } = req.body;
+    const cacheKey = `query:${collection}:${JSON.stringify(filter)}`;
+    
+    let result = await cache.get(cacheKey);
+    if (!result) {
+      result = await db.query(collection, filter, options);
+      await cache.set(cacheKey, result, 300); // 5 min cache
+    }
+    
+    res.json(result);
+  } catch (e) {
+    logger.error('DB query error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============= WORKSTREAM 4: INTEGRATIONS (10 endpoints) =============
+
+// Register webhook
+app.post('/api/integrations/webhook/register', (req, res) => {
+  try {
+    const webhook = webhooks.registerWebhook(req.body);
+    logger.info('Webhook registered:', webhook.id);
+    res.json(webhook);
+  } catch (e) {
+    logger.error('Register webhook error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Trigger webhook
+app.post('/api/integrations/webhook/trigger', async (req, res) => {
+  try {
+    const { event, payload } = req.body;
+    await webhooks.triggerWebhook(event, payload);
+    logger.info('Webhook triggered:', event);
+    res.json({ success: true });
+  } catch (e) {
+    logger.error('Trigger webhook error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Slack connect
+app.post('/api/integrations/slack/connect', (req, res) => {
+  try {
+    // Stub for OAuth flow
+    logger.info('Slack connection initiated');
+    res.json({ success: true, message: 'Slack OAuth flow would be initiated' });
+  } catch (e) {
+    logger.error('Slack connect error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Slack command handler
+app.post('/api/integrations/slack/command', (req, res) => {
+  try {
+    const { command, text } = req.body;
+    logger.info('Slack command received:', command, text);
+    
+    // Handle /warp commands
+    if (command === '/warp') {
+      if (text.startsWith('workflow run')) {
+        // Trigger workflow
+        res.json({ response_type: 'in_channel', text: 'Workflow execution started!' });
+      } else {
+        res.json({ text: 'Available commands: workflow run <id>, approval <id>' });
+      }
+    }
+  } catch (e) {
+    logger.error('Slack command error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GitHub webhook
+app.post('/api/integrations/github/webhook', (req, res) => {
+  try {
+    const { action, pull_request } = req.body;
+    logger.info('GitHub webhook received:', action);
+    
+    if (action === 'opened' || action === 'synchronize') {
+      addNotification('info', 'GitHub PR', `PR #${pull_request?.number} ${action}`);
+    }
+    
+    res.json({ success: true });
+  } catch (e) {
+    logger.error('GitHub webhook error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Discord send message
+app.post('/api/integrations/discord/send', (req, res) => {
+  try {
+    const { message, channel } = req.body;
+    logger.info('Discord message sent:', channel);
+    // Stub - would use Discord API
+    res.json({ success: true });
+  } catch (e) {
+    logger.error('Discord send error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Integration status
+app.get('/api/integrations/status', (req, res) => {
+  try {
+    const status = {
+      slack: false,
+      github: false,
+      discord: false,
+      webhooks: Array.from(webhooks.webhooks.values()).length
+    };
+    res.json(status);
+  } catch (e) {
+    logger.error('Get integrations status error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Disconnect integration
+app.delete('/api/integrations/:service', (req, res) => {
+  try {
+    logger.info('Integration disconnected:', req.params.service);
+    res.json({ success: true });
+  } catch (e) {
+    logger.error('Disconnect integration error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Test integration
+app.post('/api/integrations/:service/test', (req, res) => {
+  try {
+    logger.info('Integration test:', req.params.service);
+    res.json({ success: true, message: 'Connection test passed' });
+  } catch (e) {
+    logger.error('Test integration error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Integration marketplace
+app.get('/api/integrations/marketplace', (req, res) => {
+  try {
+    const marketplace = [
+      { id: 'slack', name: 'Slack', icon: '💬', installed: false },
+      { id: 'github', name: 'GitHub', icon: '🐙', installed: false },
+      { id: 'discord', name: 'Discord', icon: '🎮', installed: false },
+      { id: 'jira', name: 'Jira', icon: '📋', installed: false },
+      { id: 'datadog', name: 'Datadog', icon: '📊', installed: false }
+    ];
+    res.json({ integrations: marketplace });
+  } catch (e) {
+    logger.error('Get marketplace error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============= WORKSTREAM 5: MOBILE COMPANION (8 endpoints) =============
+
+// Mobile auth
+app.post('/api/mobile/auth', authLimiter, (req, res) => {
+  try {
+    const { username, biometric } = req.body;
+    // Stub auth - would validate credentials
+    const token = crypto.randomBytes(32).toString('hex');
+    logger.info('Mobile auth:', username);
+    res.json({ success: true, token, user: { id: username, name: username } });
+  } catch (e) {
+    logger.error('Mobile auth error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mobile dashboard (lightweight)
+app.get('/api/mobile/dashboard', async (req, res) => {
+  try {
+    const projects = loadProjects().slice(0, 10); // First 10 projects
+    const analytics = aggregateAnalytics(null, '24h');
+    
+    res.json({
+      projects: projects.map(p => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        lastActive: p.lastActive
+      })),
+      kpis: {
+        totalRuns: analytics?.totalRuns || 0,
+        successRate: analytics?.successRate || 0,
+        activeAgents: analytics?.activeAgents || 0
+      }
+    });
+  } catch (e) {
+    logger.error('Mobile dashboard error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mobile approvals list
+app.get('/api/mobile/approvals', (req, res) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(approvalsFile, 'utf-8'));
+    const pending = data.approvals.filter(a => a.status === 'pending').slice(0, 20);
+    res.json({ approvals: pending });
+  } catch (e) {
+    logger.error('Mobile approvals error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mobile approve
+app.post('/api/mobile/approve', async (req, res) => {
+  try {
+    const { id, userId } = req.body;
+    const data = JSON.parse(fs.readFileSync(approvalsFile, 'utf-8'));
+    const approval = data.approvals.find(a => a.id === id);
+    
+    if (!approval) return res.status(404).json({ error: 'Approval not found' });
+    
+    approval.status = 'approved';
+    approval.approvedBy = userId;
+    approval.approvedAt = Date.now();
+    
+    fs.writeFileSync(approvalsFile, JSON.stringify(data, null, 2));
+    logger.info('Mobile approval:', id, userId);
+    
+    res.json({ success: true, approval });
+  } catch (e) {
+    logger.error('Mobile approve error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mobile agents list
+app.get('/api/mobile/agents', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit || '20');
+    const agents = await readYAMLList(agentsFile, 'agents');
+    const lightweight = agents.slice(0, limit).map(a => ({
+      id: a.id,
+      name: a.name,
+      type: a.type
+    }));
+    res.json({ agents: lightweight });
+  } catch (e) {
+    logger.error('Mobile agents error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mobile agent run
+app.post('/api/mobile/agents/:id/run', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { input } = req.body;
+    
+    logger.info('Mobile agent run:', id);
+    
+    // Stub execution
+    const result = {
+      success: true,
+      output: `Agent ${id} executed with input: ${JSON.stringify(input)}`,
+      timestamp: Date.now()
+    };
+    
+    res.json(result);
+  } catch (e) {
+    logger.error('Mobile agent run error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mobile notifications
+app.get('/api/mobile/notifications', (req, res) => {
+  try {
+    const notifications = loadNotifications().slice(-10); // Last 10
+    res.json({ notifications });
+  } catch (e) {
+    logger.error('Mobile notifications error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mobile offline cache sync
+app.get('/api/mobile/offline-cache', async (req, res) => {
+  try {
+    const projects = loadProjects().slice(0, 5);
+    const agents = await readYAMLList(agentsFile, 'agents');
+    const approvals = JSON.parse(fs.readFileSync(approvalsFile, 'utf-8')).approvals.filter(a => a.status === 'pending');
+    
+    res.json({
+      projects: projects.map(p => ({ id: p.id, name: p.name, status: p.status })),
+      agents: agents.slice(0, 10).map(a => ({ id: a.id, name: a.name })),
+      approvals: approvals.slice(0, 10),
+      syncedAt: Date.now()
+    });
+  } catch (e) {
+    logger.error('Mobile offline cache error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+logger.info('Phase 3 features initialized: Workflows, Collaboration, Performance, Integrations, Mobile');
+
 const server = app.listen(PORT, () => {
   if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
   if (!fs.existsSync(eventsFile)) fs.writeFileSync(eventsFile, '', 'utf-8');

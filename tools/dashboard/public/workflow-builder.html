@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workflow Builder - Warp Development System</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .workflow-container {
+      display: grid;
+      grid-template-columns: 250px 1fr 300px;
+      height: calc(100vh - 60px);
+      gap: 1rem;
+      padding: 1rem;
+    }
+    
+    .agent-palette {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-y: auto;
+    }
+    
+    .agent-palette h3 {
+      margin-top: 0;
+      color: var(--text-primary);
+    }
+    
+    .agent-item {
+      background: var(--bg-tertiary);
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      border-radius: 6px;
+      cursor: grab;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    
+    .agent-item:hover {
+      border-color: var(--primary);
+      transform: translateX(4px);
+    }
+    
+    .canvas-area {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    #workflow-canvas {
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    
+    .workflow-node {
+      position: absolute;
+      background: var(--bg-tertiary);
+      border: 2px solid var(--primary);
+      border-radius: 8px;
+      padding: 1rem;
+      min-width: 150px;
+      cursor: move;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .workflow-node.selected {
+      border-color: var(--success);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+    }
+    
+    .workflow-node h4 {
+      margin: 0 0 0.5rem 0;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+    }
+    
+    .workflow-node .node-id {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      opacity: 0.6;
+    }
+    
+    .properties-panel {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-y: auto;
+    }
+    
+    .properties-panel h3 {
+      margin-top: 0;
+      color: var(--text-primary);
+    }
+    
+    .property-group {
+      margin-bottom: 1rem;
+    }
+    
+    .property-group label {
+      display: block;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      margin-bottom: 0.25rem;
+    }
+    
+    .property-group input,
+    .property-group select,
+    .property-group textarea {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: var(--text-primary);
+      font-family: inherit;
+    }
+    
+    .toolbar {
+      display: flex;
+      gap: 0.5rem;
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    
+    .btn-toolbar {
+      padding: 0.5rem 1rem;
+      background: var(--primary);
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+    
+    .btn-toolbar:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+    
+    .btn-toolbar.danger {
+      background: var(--danger);
+    }
+    
+    .btn-toolbar.success {
+      background: var(--success);
+    }
+    
+    .execution-status {
+      padding: 1rem;
+      background: var(--bg-tertiary);
+      border-radius: 6px;
+      margin-top: 1rem;
+    }
+    
+    .execution-log {
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--bg-primary);
+      padding: 0.5rem;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+    }
+    
+    .log-entry {
+      padding: 0.25rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .log-entry.success {
+      color: var(--success);
+    }
+    
+    .log-entry.error {
+      color: var(--danger);
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav-header">
+    <div class="nav-brand">⚡ Warp Workflow Builder</div>
+    <div class="nav-links">
+      <a href="index.html">Dashboard</a>
+      <a href="agents.html">Agents</a>
+      <a href="workflow-builder.html" class="active">Workflows</a>
+    </div>
+  </nav>
+
+  <div class="toolbar">
+    <button class="btn-toolbar" id="btn-new">New Workflow</button>
+    <button class="btn-toolbar" id="btn-save">Save</button>
+    <button class="btn-toolbar" id="btn-load">Load</button>
+    <button class="btn-toolbar success" id="btn-execute">Execute</button>
+    <button class="btn-toolbar danger" id="btn-clear">Clear Canvas</button>
+    <div style="flex: 1"></div>
+    <select id="execution-mode" style="padding: 0.5rem; border-radius: 4px;">
+      <option value="sequential">Sequential</option>
+      <option value="parallel">Parallel</option>
+    </select>
+  </div>
+
+  <div class="workflow-container">
+    <div class="agent-palette">
+      <h3>Agent Palette</h3>
+      <div id="agent-list"></div>
+    </div>
+
+    <div class="canvas-area">
+      <canvas id="workflow-canvas"></canvas>
+      <div id="nodes-container"></div>
+    </div>
+
+    <div class="properties-panel">
+      <h3>Workflow Properties</h3>
+      <div class="property-group">
+        <label>Workflow Name</label>
+        <input type="text" id="workflow-name" placeholder="My Workflow">
+      </div>
+      <div class="property-group">
+        <label>Description</label>
+        <textarea id="workflow-description" rows="3" placeholder="Workflow description..."></textarea>
+      </div>
+      
+      <div id="node-properties" style="display: none;">
+        <h3>Node Properties</h3>
+        <div class="property-group">
+          <label>Node ID</label>
+          <input type="text" id="node-id" readonly>
+        </div>
+        <div class="property-group">
+          <label>Agent ID</label>
+          <input type="text" id="node-agent-id" readonly>
+        </div>
+        <div class="property-group">
+          <label>Configuration (JSON)</label>
+          <textarea id="node-config" rows="5" placeholder='{"key": "value"}'></textarea>
+        </div>
+      </div>
+
+      <div class="execution-status">
+        <h4>Execution Status</h4>
+        <div id="execution-info">
+          <p>No execution in progress</p>
+        </div>
+        <div class="execution-log" id="execution-log"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="workflow-builder.js"></script>
+</body>
+</html>

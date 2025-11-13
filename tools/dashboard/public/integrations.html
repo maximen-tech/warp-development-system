@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrations - Warp Development System</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .integrations-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+      padding: 2rem;
+    }
+    
+    .integration-card {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 1.5rem;
+      border: 2px solid var(--border);
+      transition: all 0.2s;
+    }
+    
+    .integration-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+    
+    .integration-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    
+    .integration-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+    
+    .integration-desc {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    
+    .integration-status {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    
+    .status-connected {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--success);
+    }
+    
+    .status-disconnected {
+      background: rgba(107, 114, 128, 0.2);
+      color: var(--text-secondary);
+    }
+    
+    .btn-connect {
+      width: 100%;
+      margin-top: 1rem;
+      padding: 0.75rem;
+      background: var(--primary);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-connect:hover {
+      background: var(--primary-hover);
+    }
+    
+    .btn-disconnect {
+      background: var(--danger);
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav-header">
+    <div class="nav-brand">⚡ Warp Integrations</div>
+    <div class="nav-links">
+      <a href="index.html">Dashboard</a>
+      <a href="agents.html">Agents</a>
+      <a href="workflow-builder.html">Workflows</a>
+      <a href="integrations.html" class="active">Integrations</a>
+    </div>
+  </nav>
+
+  <div class="integrations-grid" id="integrations-grid">
+    <!-- Populated by JS -->
+  </div>
+
+  <script>
+    const integrations = [
+      {
+        id: 'slack',
+        name: 'Slack',
+        icon: '💬',
+        description: 'Send notifications and run workflows from Slack',
+        connected: false
+      },
+      {
+        id: 'github',
+        name: 'GitHub',
+        icon: '🐙',
+        description: 'PR notifications and deploy triggers',
+        connected: false
+      },
+      {
+        id: 'discord',
+        name: 'Discord',
+        icon: '🎮',
+        description: 'Real-time alerts and bot commands',
+        connected: false
+      },
+      {
+        id: 'webhook',
+        name: 'Generic Webhook',
+        icon: '🔗',
+        description: 'Custom webhook integrations',
+        connected: false
+      },
+      {
+        id: 'jira',
+        name: 'Jira',
+        icon: '📋',
+        description: 'Sync workflows with Jira tickets',
+        connected: false
+      },
+      {
+        id: 'datadog',
+        name: 'Datadog',
+        icon: '📊',
+        description: 'Send metrics and logs to Datadog',
+        connected: false
+      }
+    ];
+
+    const grid = document.getElementById('integrations-grid');
+    
+    integrations.forEach(integration => {
+      const card = document.createElement('div');
+      card.className = 'integration-card';
+      card.innerHTML = `
+        <div class="integration-icon">${integration.icon}</div>
+        <div class="integration-name">${integration.name}</div>
+        <div class="integration-desc">${integration.description}</div>
+        <span class="integration-status ${integration.connected ? 'status-connected' : 'status-disconnected'}">
+          ${integration.connected ? 'Connected' : 'Not Connected'}
+        </span>
+        <button class="btn-connect ${integration.connected ? 'btn-disconnect' : ''}" 
+                data-integration-id="${integration.id}">
+          ${integration.connected ? 'Disconnect' : 'Connect'}
+        </button>
+      `;
+      
+      const btn = card.querySelector('.btn-connect');
+      btn.addEventListener('click', async () => {
+        if (integration.connected) {
+          await disconnectIntegration(integration.id);
+        } else {
+          await connectIntegration(integration.id);
+        }
+      });
+      
+      grid.appendChild(card);
+    });
+
+    async function connectIntegration(id) {
+      try {
+        const response = await fetch(`/api/integrations/${id}/connect`, {
+          method: 'POST'
+        });
+        const result = await response.json();
+        alert(`${id} connected successfully!`);
+        location.reload();
+      } catch (error) {
+        alert(`Failed to connect ${id}: ` + error.message);
+      }
+    }
+
+    async function disconnectIntegration(id) {
+      try {
+        const response = await fetch(`/api/integrations/${id}`, {
+          method: 'DELETE'
+        });
+        alert(`${id} disconnected!`);
+        location.reload();
+      } catch (error) {
+        alert(`Failed to disconnect ${id}: ` + error.message);
+      }
+    }
+  </script>
+</body>
+</html>
