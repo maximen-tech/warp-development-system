@@ -1,0 +1,8 @@
+# Sample output: executor
+{
+  "actions": {
+    "posix": [
+      {"name": "build", "cmd": ["bash", "05_WORKFLOWS/slash-commands/build/build.sh"], "dry_run": true}
+    ]
+  }
+}

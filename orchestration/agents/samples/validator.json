@@ -1,0 +1,11 @@
+# Sample output: validator
+{
+  "summary": {
+    "available": {
+      "markdownlint": true,
+      "yamllint": false,
+      "shellcheck": false,
+      "psscriptanalyzer": true
+    }
+  }
+}

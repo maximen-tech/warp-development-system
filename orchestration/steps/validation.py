@@ -18,7 +18,11 @@ def validate_step(state: Dict[str, Any]) -> Dict[str, Any]:
         "shellcheck": _cmd_exists("shellcheck"),
         "psscriptanalyzer": _cmd_exists("pwsh"),
     }
-    summary = {"available": checks, "note": "Commands may be unavailable locally; CI will still run them."}
+    # Pattern 11: record last actions for history/mining
+    history = state.get("history", [])
+    actions = state.get("actions", {})
+    history.append({"phase": "validation", "checks": checks, "actions": actions})
+    summary = {"available": checks, "note": "Commands may be unavailable locally; CI will still run them.", "history_len": len(history)}
 
     # Write plan.md if a plan exists (Pattern 1 output artifact)
     try:

@@ -4,6 +4,7 @@ from typing import Dict, Any
 
 @dataclass
 class ValidatorAgent:
+    """Validator agent aggregating tool availability and producing a score."""
     name: str = "validator"
     model_profile: str = "claude-execution"  # or distinct validation profile
 

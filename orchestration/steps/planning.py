@@ -28,4 +28,7 @@ def plan_step(state: Dict[str, Any]) -> Dict[str, Any]:
         "top_dirs": top_dirs,
         "files_hint": ["README.md", ".github/workflows/ci.yml", "WARP.md"],
     }
-    return {"plan": plan, "context": {**state.get("context", {}), **context}, "status": "planned"}
+    # Pattern 11: command history mining seed
+    history_entry = {"phase": "planning", "goal": goal, "top_dirs": top_dirs}
+    (state.setdefault("history", [])).append(history_entry)
+    return {"plan": plan, "context": {**state.get("context", {}), **context}, "status": "planned", "history": state.get("history")}

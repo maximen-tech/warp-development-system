@@ -1,0 +1,8 @@
+# Sample output: planner
+{
+  "plan": [
+    "Clarify goal",
+    "Identify relevant files",
+    "Draft minimal actions"
+  ]
+}
