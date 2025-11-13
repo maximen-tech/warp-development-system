@@ -73,3 +73,12 @@ header{padding:12px 16px;background:#151b23;border-bottom:1px solid var(--border
 @keyframes spin{to{transform:rotate(360deg)}}
 .btn-loading{opacity:0.7;cursor:not-allowed;position:relative}
 .btn-loading::after{content:'';position:absolute;inset:0;background:rgba(0,0,0,0.1);border-radius:inherit}
+
+/* UX Suite Enhancements */
+.compact-mode .card{padding:8px}
+.compact-mode .pill{padding:4px 8px;font-size:13px}
+.high-contrast{filter:contrast(1.2)}
+.high-contrast .badge,.high-contrast .pill{border-width:2px}
+.reduced-motion *{animation:none !important;transition:none !important}
+.a11y-enhanced button:focus-visible,.a11y-enhanced a:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.a11y-enhanced .card:focus-visible{outline:2px solid var(--info);outline-offset:2px}
