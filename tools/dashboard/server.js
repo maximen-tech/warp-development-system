@@ -229,6 +229,15 @@ app.post('/api/theme', (req, res) => {
   try { const t = (req.body || {}).theme || 'dark'; fs.writeFileSync(themeFile, t, 'utf-8'); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// Approval mode persist ('strict'|'permissive')
+const approvalModeFile = path.join(runtimeDir, 'approval_mode.txt');
+app.get('/api/approval-mode', (_req, res) => {
+  try { const m = fs.existsSync(approvalModeFile) ? fs.readFileSync(approvalModeFile, 'utf-8').trim() : 'strict'; res.json({ mode: m || 'strict' }); } catch { res.json({ mode: 'strict' }); }
+});
+app.post('/api/approval-mode', (req, res) => {
+  try { const m = (req.body || {}).mode || 'strict'; fs.writeFileSync(approvalModeFile, m, 'utf-8'); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 app.listen(PORT, () => {
   if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
   if (!fs.existsSync(eventsFile)) fs.writeFileSync(eventsFile, '', 'utf-8');

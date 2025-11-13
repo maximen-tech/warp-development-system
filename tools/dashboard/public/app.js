@@ -31,9 +31,13 @@ function renderApprovals(){
     const row = document.createElement('div');
     row.className='row';
     row.style.justifyContent='space-between';
-    row.innerHTML = `<span class="small">${ap.phase||''} · ${ap.agent||''}</span><button class="pill">Approve</button>`;
-    row.querySelector('button').onclick = async ()=>{
-      await approveNow(ap.data?.actionId || ap.actionId || null);
+    const actionId = ap.data?.actionId || ap.actionId || null;
+    const runId = ap.data?.runId || ap.runId || null;
+    row.innerHTML = `<span class="small">${ap.phase||''} · ${ap.agent||''} · run=${runId||'-'}</span><button class="pill">Approve</button>`;
+    row.querySelector('button').onclick = async (evt)=>{
+      const btn = evt.currentTarget; btn.textContent='Processing…'; btn.disabled=true;
+      await approveNow(actionId, runId);
+      setTimeout(()=>{ btn.textContent='Approve'; btn.disabled=false; }, 1200);
     };
     el.prepend(row);
   }
@@ -42,7 +46,7 @@ function renderApprovals(){
 function applyCounters(ev){
   state.counters.total++;
   if(ev.status==='error') state.counters.errors++;
-  if(ev.status==='awaiting_approval'){ state.counters.approvals++; state.approvals.push(ev); renderApprovals(); }
+  if(ev.kind==='action_proposed' && (ev.data?.approval==='manual')){ state.counters.approvals++; state.approvals.push(ev); renderApprovals(); }
   if(ev.phase) state.last.phase = ev.phase;
 }
 
@@ -98,7 +102,7 @@ export function initDashboard(){
 }
 
 export async function runScenario(name){ await fetch(`/api/run/${name}`, { method:'POST' }); }
-export async function approveNow(actionId){
-  const ev = { ts: Date.now()/1000, kind:'approval_granted', status:'ok', data:{ by:'ui', actionId: actionId||null } };
+export async function approveNow(actionId, runId){
+  const ev = { ts: Date.now()/1000, kind:'approval_granted', status:'ok', data:{ by:'ui', actionId: actionId||null, runId: runId||null } };
   await fetch('/api/events/append',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(ev)});
 }

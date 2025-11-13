@@ -21,6 +21,7 @@
       <div class="grid" id="overview"></div>
       <div class="row" style="gap:12px;margin:12px 0;">
         <button class="pill" id="themeToggle">Toggle theme</button>
+        <button class="pill" id="toggleStrict">Strict approvals</button>
         <button class="pill" onclick="runScenario('happy')">Run happy</button>
         <button class="pill" onclick="runScenario('escalation')">Run escalation</button>
         <button class="pill" onclick="runScenario('edge')">Run edge</button>
@@ -97,6 +98,10 @@
         document.documentElement.classList.toggle('light', isLight);
         await fetch('/api/theme',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ theme: isLight ? 'light' : 'dark' })});
       };
+      // approval mode init
+      (async ()=>{ try{ const r = await fetch('/api/approval-mode'); const m = (await r.json()).mode; const on = (m||'strict')==='strict'; document.getElementById('toggleStrict').classList.toggle('active', on);}catch{}})();
+      document.getElementById('toggleStrict').onclick = async ()=>{ const on = !document.getElementById('toggleStrict').classList.contains('active'); document.getElementById('toggleStrict').classList.toggle('active', on); await fetch('/api/approval-mode',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mode: on ? 'strict' : 'permissive' })}); };
+
       // markdown preview (plan.md)
       async function previewPlan(){
         try {

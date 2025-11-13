@@ -51,7 +51,7 @@ def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
         for a in group:
             level = _needs_approval(a.get("paths", []))
             a["approval"] = level
-            log_event("action_proposed", {"actionId": a.get("id"), "cmd": a["cmd"], "approval": level, "paths": a.get("paths")}, phase="execute")
+            log_event("action_proposed", {"runId": state.get("runId"), "actionId": a.get("id"), "cmd": a["cmd"], "approval": level, "paths": a.get("paths")}, phase="execute")
 
     # Optional simulation: add a risky action to demonstrate manual approval gates
     if (state.get("context") or {}).get("simulate_risky"):

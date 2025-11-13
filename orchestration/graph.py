@@ -13,6 +13,18 @@ import time
 from .config import load_agent_config
 from .logging import log_event
 
+
+def _read_approval_mode() -> bool:
+    """Return True if strict mode; reads runtime/approval_mode.txt ('strict'|'permissive')."""
+    try:
+        p = os.path.join(_runtime_dir(), "approval_mode.txt")
+        if os.path.exists(p):
+            val = (open(p, "r", encoding="utf-8").read().strip() or "strict").lower()
+            return val != "permissive"
+    except Exception:
+        pass
+    return True
+
 # Optional import of LangGraph; fall back to a simple sequential runner if unavailable
 try:  # pragma: no cover
     from langgraph.graph import StateGraph, END  # type: ignore
@@ -64,6 +76,7 @@ class _SimpleRunner:  # minimal shim with invoke() to mirror LangGraph compiled 
             return
         pending = set([a.get("actionId") for a in approvals if a.get("actionId")])
         approve_all_on_any = not pending  # if no actionId, any approval_granted unlocks
+        strict = bool((state.get("constraints") or {}).get("approval_strict", True))
         events_path = os.path.join(_runtime_dir(), "events.jsonl")
         start_size = os.path.getsize(events_path) if os.path.exists(events_path) else 0
         deadline = time.time() + float((state.get("constraints") or {}).get("approval_timeout", 600))
@@ -85,6 +98,9 @@ class _SimpleRunner:  # minimal shim with invoke() to mirror LangGraph compiled 
                             if ev.get("kind") == "approval_granted":
                                 data = ev.get("data") or {}
                                 action_id = data.get("actionId")
+                                data_run = data.get("runId")
+                                if strict and data_run != state.get("runId"):
+                                    continue
                                 if approve_all_on_any or (action_id and action_id in pending):
                                     if action_id in pending:
                                         pending.discard(action_id)
@@ -141,6 +157,10 @@ def build_graph(retries: int = 1):
 def run_goal(goal: str, constraints: Optional[Dict[str, Any]] = None, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     cfg = load_agent_config(os.path.dirname(os.path.dirname(__file__)))
     retries = int((constraints or {}).get("retries", 1))
+    if constraints is None:
+        constraints = {}
+    if "approval_strict" not in constraints:
+        constraints["approval_strict"] = _read_approval_mode()
     run_id = str(os.urandom(8).hex())
     state: Dict[str, Any] = {
         "goal": goal,
