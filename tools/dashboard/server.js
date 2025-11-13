@@ -12,6 +12,10 @@ import CodeWatcher from './lib/code-watcher.js';
 import PromptSynthesizer from './lib/prompt-synthesizer.js';
 import { spawn } from 'child_process';
 import { WebSocketServer } from 'ws';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import Joi from 'joi';
+import winston from 'winston';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,8 +26,69 @@ const eventsFile = path.join(runtimeDir, 'events.jsonl');
 const changeLogFile = path.join(runtimeDir, 'agents_changes.jsonl');
 const versionPtrFile = path.join(runtimeDir, 'agents_version.txt');
 
+// Production Security & Logging
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: path.join(runtimeDir, 'error.log'), level: 'error' }),
+    new winston.transports.File({ filename: path.join(runtimeDir, 'combined.log') }),
+    new winston.transports.Console({ format: winston.format.simple() })
+  ]
+});
+
+// Security Middleware
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow inline scripts for dashboard
+  crossOriginEmbedderPolicy: false
+}));
+
+// Rate Limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 1000 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  message: 'Too many authentication attempts, please try again later.'
+});
+
+app.use('/api/', apiLimiter);
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '1mb' }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info(`${req.method} ${req.url} ${res.statusCode} ${duration}ms`);
+  });
+  next();
+});
+
+// Initialize data files
+const approvalsFile = path.join(runtimeDir, 'approvals.json');
+const auditLogFile = path.join(runtimeDir, 'audit.jsonl');
+const analyticsFile = path.join(runtimeDir, 'analytics.json');
+
+function ensureRuntimeFiles() {
+  if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
+  if (!fs.existsSync(approvalsFile)) fs.writeFileSync(approvalsFile, JSON.stringify({ approvals: [] }), 'utf-8');
+  if (!fs.existsSync(auditLogFile)) fs.writeFileSync(auditLogFile, '', 'utf-8');
+  if (!fs.existsSync(analyticsFile)) fs.writeFileSync(analyticsFile, JSON.stringify({ kpis: {}, events: [] }), 'utf-8');
+  if (!fs.existsSync(eventsFile)) fs.writeFileSync(eventsFile, '', 'utf-8');
+}
+ensureRuntimeFiles();
 
 // Agents API (read/write .warp/agents/*)
 const repoRoot = path.resolve(__dirname, '../../');
@@ -36,6 +101,36 @@ function ensureDirs(){
   if (!fs.existsSync(agentsDir)) fs.mkdirSync(agentsDir, { recursive: true });
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 }
+
+// Resolve agents/skills YAML paths for a given project path.
+// - If projectPath is null/empty, use global .warp/agents paths
+// - If projectPath is provided, use <projectPath>/.warp/agents/{agents,skills}.yml
+function getAgentsFilesForPath(projectPath) {
+  if (!projectPath) {
+    ensureDirs();
+    return { agentsFilePath: agentsFile, skillsFilePath: skillsFile };
+  }
+  const warpAgentsDir = path.join(projectPath, '.warp', 'agents');
+  if (!fs.existsSync(warpAgentsDir)) {
+    fs.mkdirSync(warpAgentsDir, { recursive: true });
+  }
+  const agentsFilePath = path.join(warpAgentsDir, 'agents.yml');
+  const skillsFilePath = path.join(warpAgentsDir, 'skills.yml');
+  return { agentsFilePath, skillsFilePath };
+}
+
+function getAgentsFilesFromReq(req) {
+  let raw = '';
+  if (req.query && typeof req.query.projectPath === 'string' && req.query.projectPath) {
+    raw = req.query.projectPath;
+  } else if (req.body && typeof req.body.projectPath === 'string' && req.body.projectPath) {
+    raw = req.body.projectPath;
+  }
+  const projectPath = raw.trim();
+  const { agentsFilePath, skillsFilePath } = getAgentsFilesForPath(projectPath || null);
+  return { agentsFilePath, skillsFilePath, projectPath: projectPath || null };
+}
+
 function logChange(kind, details){
   try{
     const entry = { ts: Date.now()/1000, kind, details };
@@ -102,10 +197,11 @@ app.post('/api/agents/validate', async (req, res) => {
 });
 
 // JSON-native APIs for no-code UI
-app.get('/api/agents/list', async (_req, res) => {
+app.get('/api/agents/list', async (req, res) => {
   try {
-    const agents = await readYAMLList(agentsFile, 'agents');
-    const skills = await readYAMLList(skillsFile, 'skills');
+    const { agentsFilePath, skillsFilePath } = getAgentsFilesFromReq(req);
+    const agents = await readYAMLList(agentsFilePath, 'agents');
+    const skills = await readYAMLList(skillsFilePath, 'skills');
     res.json({ agents, skills });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
@@ -113,6 +209,7 @@ app.post('/api/agents/save', async (req, res) => {
   try {
     ensureDirs();
     const { agents, skills, validateOnly, reason } = req.body || {};
+    const { agentsFilePath, skillsFilePath, projectPath } = getAgentsFilesFromReq(req);
     const YAML = (await import('yaml')).default;
     const errors = [];
     try { YAML.parse(YAML.stringify({ agents: agents||[] })); } catch (e) { errors.push({ file: 'agents.yml', error: String(e) }); }
@@ -120,13 +217,13 @@ app.post('/api/agents/save', async (req, res) => {
     if (errors.length) return res.json({ ok:false, errors });
     if (validateOnly) return res.json({ ok:true, validated:true });
     const ts = Date.now();
-    const beforeAgents = fs.existsSync(agentsFile) ? `agents.${ts}.yml` : null;
-    const beforeSkills = fs.existsSync(skillsFile) ? `skills.${ts}.yml` : null;
-    if (beforeAgents) fs.copyFileSync(agentsFile, path.join(backupDir, beforeAgents));
-    if (beforeSkills) fs.copyFileSync(skillsFile, path.join(backupDir, beforeSkills));
-    await writeYAMLList(agentsFile, 'agents', agents||[]);
-    await writeYAMLList(skillsFile, 'skills', skills||[]);
-    logChange('save', { beforeAgents, beforeSkills, reason: reason||null });
+    const beforeAgents = fs.existsSync(agentsFilePath) ? `agents.${ts}.yml` : null;
+    const beforeSkills = fs.existsSync(skillsFilePath) ? `skills.${ts}.yml` : null;
+    if (beforeAgents) fs.copyFileSync(agentsFilePath, path.join(backupDir, beforeAgents));
+    if (beforeSkills) fs.copyFileSync(skillsFilePath, path.join(backupDir, beforeSkills));
+    await writeYAMLList(agentsFilePath, 'agents', agents||[]);
+    await writeYAMLList(skillsFilePath, 'skills', skills||[]);
+    logChange('save', { beforeAgents, beforeSkills, reason: reason||null, projectPath: projectPath||null });
     // advance pointer to latest backup (agents wins if present)
     const ptr = beforeAgents || beforeSkills || '';
     if(ptr) fs.writeFileSync(versionPtrFile, ptr, 'utf-8');
@@ -168,14 +265,15 @@ app.post('/api/agents/item', async (req,res)=>{
   try{
     ensureDirs();
     const { agent } = req.body||{}; if(!agent || !agent.name) return res.status(400).json({ error:'missing agent.name' });
-    const agents = await readYAMLList(agentsFile,'agents');
-    const skills = await readYAMLList(skillsFile,'skills');
+    const { agentsFilePath, skillsFilePath, projectPath } = getAgentsFilesFromReq(req);
+    const agents = await readYAMLList(agentsFilePath,'agents');
+    const skills = await readYAMLList(skillsFilePath,'skills');
     // validate
     const v = await (await fetchLikeValidate({ agents: mergeOne(agents, agent), skills })).json();
     if(!v.ok) return res.json(v);
-    const ts = Date.now(); if (fs.existsSync(agentsFile)) fs.copyFileSync(agentsFile, path.join(backupDir, `agents.${ts}.yml`));
-await writeYAMLList(agentsFile,'agents', mergeOne(agents, agent));
-    logChange('agent_upsert', { name: agent.name, backup: `agents.${ts}.yml` });
+    const ts = Date.now(); if (fs.existsSync(agentsFilePath)) fs.copyFileSync(agentsFilePath, path.join(backupDir, `agents.${ts}.yml`));
+    await writeYAMLList(agentsFilePath,'agents', mergeOne(agents, agent));
+    logChange('agent_upsert', { name: agent.name, backup: `agents.${ts}.yml`, projectPath: projectPath||null });
     return res.json({ ok:true });
   }catch(e){ res.status(500).json({ error:String(e) }); }
 });
@@ -183,11 +281,12 @@ app.delete('/api/agents/item', async (req,res)=>{
   try{
     ensureDirs();
     const name = (req.query.name||'').trim(); if(!name) return res.status(400).json({ error:'missing name' });
-    const agents = await readYAMLList(agentsFile,'agents');
+    const { agentsFilePath, projectPath } = getAgentsFilesFromReq(req);
+    const agents = await readYAMLList(agentsFilePath,'agents');
     const next = agents.filter(a=>(a?.name)!==name);
-    const ts = Date.now(); if (fs.existsSync(agentsFile)) fs.copyFileSync(agentsFile, path.join(backupDir, `agents.${ts}.yml`));
-await writeYAMLList(agentsFile,'agents', next);
-    logChange('agent_delete', { name, backup: `agents.${ts}.yml` });
+    const ts = Date.now(); if (fs.existsSync(agentsFilePath)) fs.copyFileSync(agentsFilePath, path.join(backupDir, `agents.${ts}.yml`));
+    await writeYAMLList(agentsFilePath,'agents', next);
+    logChange('agent_delete', { name, backup: `agents.${ts}.yml`, projectPath: projectPath||null });
     return res.json({ ok:true });
   }catch(e){ res.status(500).json({ error:String(e) }); }
 });
@@ -195,15 +294,16 @@ app.post('/api/skills/item', async (req,res)=>{
   try{
     ensureDirs();
     const { skill } = req.body||{}; if(!skill || !skill.name) return res.status(400).json({ error:'missing skill.name' });
-    const skills = await readYAMLList(skillsFile,'skills');
+    const { agentsFilePath, skillsFilePath, projectPath } = getAgentsFilesFromReq(req);
+    const skills = await readYAMLList(skillsFilePath,'skills');
     const next = mergeOne(skills, skill);
     // validate against agents references
-    const agents = await readYAMLList(agentsFile,'agents');
+    const agents = await readYAMLList(agentsFilePath,'agents');
     const v = await (await fetchLikeValidate({ agents, skills: next })).json();
     if(!v.ok) return res.json(v);
-    const ts = Date.now(); if (fs.existsSync(skillsFile)) fs.copyFileSync(skillsFile, path.join(backupDir, `skills.${ts}.yml`));
-await writeYAMLList(skillsFile,'skills', next);
-    logChange('skill_upsert', { name: skill.name, backup: `skills.${ts}.yml` });
+    const ts = Date.now(); if (fs.existsSync(skillsFilePath)) fs.copyFileSync(skillsFilePath, path.join(backupDir, `skills.${ts}.yml`));
+    await writeYAMLList(skillsFilePath,'skills', next);
+    logChange('skill_upsert', { name: skill.name, backup: `skills.${ts}.yml`, projectPath: projectPath||null });
     return res.json({ ok:true });
   }catch(e){ res.status(500).json({ error:String(e) }); }
 });
@@ -211,18 +311,19 @@ app.delete('/api/skills/item', async (req,res)=>{
   try{
     ensureDirs();
     const name = (req.query.name||'').trim(); if(!name) return res.status(400).json({ error:'missing name' });
-    const skills = await readYAMLList(skillsFile,'skills');
+    const { agentsFilePath, skillsFilePath, projectPath } = getAgentsFilesFromReq(req);
+    const skills = await readYAMLList(skillsFilePath,'skills');
     const next = skills.filter(s=>(s?.name)!==name);
     // detach from agents
-    const agents = await readYAMLList(agentsFile,'agents');
+    const agents = await readYAMLList(agentsFilePath,'agents');
     for (const a of agents){ a.skills = (a.skills||[]).filter(n=>n!==name); }
     const v = await (await fetchLikeValidate({ agents, skills: next })).json();
     if(!v.ok) return res.json(v);
-    const ts = Date.now(); if (fs.existsSync(skillsFile)) fs.copyFileSync(skillsFile, path.join(backupDir, `skills.${ts}.yml`));
-    if (fs.existsSync(agentsFile)) fs.copyFileSync(agentsFile, path.join(backupDir, `agents.${ts}.yml`));
-    await writeYAMLList(skillsFile,'skills', next);
-await writeYAMLList(agentsFile,'agents', agents);
-    logChange('skill_delete', { name, backupSkills: `skills.${ts}.yml`, backupAgents: `agents.${ts}.yml` });
+    const ts = Date.now(); if (fs.existsSync(skillsFilePath)) fs.copyFileSync(skillsFilePath, path.join(backupDir, `skills.${ts}.yml`));
+    if (fs.existsSync(agentsFilePath)) fs.copyFileSync(agentsFilePath, path.join(backupDir, `agents.${ts}.yml`));
+    await writeYAMLList(skillsFilePath,'skills', next);
+    await writeYAMLList(agentsFilePath,'agents', agents);
+    logChange('skill_delete', { name, backupSkills: `skills.${ts}.yml`, backupAgents: `agents.${ts}.yml`, projectPath: projectPath||null });
     return res.json({ ok:true });
   }catch(e){ res.status(500).json({ error:String(e) }); }
 });
@@ -247,13 +348,14 @@ async function fetchLikeValidate(body){
 app.get('/api/agents/export', async (req,res)=>{
   try{
     const format = String(req.query.format||'json').toLowerCase();
-    const agents = await readYAMLList(agentsFile,'agents');
-    const skills = await readYAMLList(skillsFile,'skills');
+    const { agentsFilePath, skillsFilePath } = getAgentsFilesFromReq(req);
+    const agents = await readYAMLList(agentsFilePath,'agents');
+    const skills = await readYAMLList(skillsFilePath,'skills');
     const names = (req.query.names||'').split(',').map(s=>s.trim()).filter(Boolean);
     const selAgents = names.length? agents.filter(a=>names.includes(a?.name)): agents;
     if(format==='csv'){
       const rows = ['name,role,model,skills'];
-      for(const a of selAgents){ rows.push(`${a.name||''},${a.role||''},${a.model||''},"${(a.skills||[]).join('|').replace(/"/g,'\"')}"`); }
+      for(const a of selAgents){ rows.push(`${a.name||''},${a.role||''},${a.model||''},"${(a.skills||[]).join('|').replace(/"/g,'\\"')}"`); }
       res.setHeader('Content-Type','text/csv');
       return res.send(rows.join('\n'));
     }
@@ -264,21 +366,22 @@ app.post('/api/agents/import', async (req,res)=>{
   try{
     ensureDirs();
     const { agents, skills, partial, dryRun } = req.body||{};
-    const curAgents = await readYAMLList(agentsFile,'agents');
-    const curSkills = await readYAMLList(skillsFile,'skills');
+    const { agentsFilePath, skillsFilePath, projectPath } = getAgentsFilesFromReq(req);
+    const curAgents = await readYAMLList(agentsFilePath,'agents');
+    const curSkills = await readYAMLList(skillsFilePath,'skills');
     let nextAgents = Array.isArray(agents)? (partial? mergeMany(curAgents, agents) : agents) : curAgents;
     let nextSkills = Array.isArray(skills)? (partial? mergeMany(curSkills, skills) : skills) : curSkills;
     const v = await (await fetchLikeValidate({ agents: nextAgents, skills: nextSkills })).json();
     if(!v.ok) return res.json(v);
-if(dryRun) return res.json({ ok:true, dryRun:true });
+    if(dryRun) return res.json({ ok:true, dryRun:true });
     const ts = Date.now();
-    const beforeAgents = fs.existsSync(agentsFile) ? `agents.${ts}.yml` : null;
-    const beforeSkills = fs.existsSync(skillsFile) ? `skills.${ts}.yml` : null;
-    if (beforeAgents) fs.copyFileSync(agentsFile, path.join(backupDir, beforeAgents));
-    if (beforeSkills) fs.copyFileSync(skillsFile, path.join(backupDir, beforeSkills));
-    await writeYAMLList(agentsFile,'agents', nextAgents);
-    await writeYAMLList(skillsFile,'skills', nextSkills);
-    logChange('import', { partial: !!partial, beforeAgents, beforeSkills });
+    const beforeAgents = fs.existsSync(agentsFilePath) ? `agents.${ts}.yml` : null;
+    const beforeSkills = fs.existsSync(skillsFilePath) ? `skills.${ts}.yml` : null;
+    if (beforeAgents) fs.copyFileSync(agentsFilePath, path.join(backupDir, beforeAgents));
+    if (beforeSkills) fs.copyFileSync(skillsFilePath, path.join(backupDir, beforeSkills));
+    await writeYAMLList(agentsFilePath,'agents', nextAgents);
+    await writeYAMLList(skillsFilePath,'skills', nextSkills);
+    logChange('import', { partial: !!partial, beforeAgents, beforeSkills, projectPath: projectPath||null });
     const ptr = beforeAgents || beforeSkills || '';
     if(ptr) fs.writeFileSync(versionPtrFile, ptr, 'utf-8');
     res.json({ ok:true });
@@ -291,8 +394,9 @@ function diffText(a,b){ const al=(a||'').split('\n'), bl=(b||'').split('\n'); co
 app.get('/api/agents/diff', async (req,res)=>{
   try{
     const name = (req.query.name||'').trim();
-    const targetAgents = fs.existsSync(agentsFile) ? fs.readFileSync(agentsFile,'utf-8') : '';
-    const targetSkills = fs.existsSync(skillsFile) ? fs.readFileSync(skillsFile,'utf-8') : '';
+    const { agentsFilePath, skillsFilePath } = getAgentsFilesFromReq(req);
+    const targetAgents = fs.existsSync(agentsFilePath) ? fs.readFileSync(agentsFilePath,'utf-8') : '';
+    const targetSkills = fs.existsSync(skillsFilePath) ? fs.readFileSync(skillsFilePath,'utf-8') : '';
     if(!name){ return res.json({ agentsDiff:'', skillsDiff:'' }); }
     const src = path.join(backupDir, name); if(!fs.existsSync(src)) return res.status(404).json({ error:'not found' });
     const backupText = fs.readFileSync(src,'utf-8');
@@ -316,8 +420,8 @@ for(const nm of names){ const src = path.join(backupDir, nm); if(fs.existsSync(s
 });
 
 // Skills usage stats
-app.get('/api/skills/usage', async (_req,res)=>{
-  try{ const agents = await readYAMLList(agentsFile,'agents'); const usage={}; for(const a of agents){ for(const s of (a.skills||[])){ usage[s] = usage[s] || { usedBy:[], count:0 }; usage[s].usedBy.push(a.name); usage[s].count++; } } res.json({ usage }); }catch(e){ res.status(500).json({ error:String(e) }); }
+app.get('/api/skills/usage', async (req,res)=>{
+  try{ const { agentsFilePath } = getAgentsFilesFromReq(req); const agents = await readYAMLList(agentsFilePath,'agents'); const usage={}; for(const a of agents){ for(const s of (a.skills||[])){ usage[s] = usage[s] || { usedBy:[], count:0 }; usage[s].usedBy.push(a.name); usage[s].count++; } } res.json({ usage }); }catch(e){ res.status(500).json({ error:String(e) }); }
 });
 // Changelog read
 app.get('/api/agents/changelog', (_req,res)=>{
@@ -446,13 +550,22 @@ app.post('/api/agents/reload', (_req, res) => {
 });
 app.post('/api/agents/test', async (req, res) => {
   try {
-    const { agent, prompt } = req.body||{}; if(!agent) return res.status(400).json({ error:'missing agent' });
+    const { agent, prompt, projectPath, input } = req.body||{}; if(!agent) return res.status(400).json({ error:'missing agent' });
+    const { agentsFilePath } = getAgentsFilesFromReq(req);
+    const agents = await readYAMLList(agentsFilePath,'agents');
+    const target = agents.find(a => a?.name === agent) || null;
     const now = Date.now()/1000; const logs = [];
     const write = (obj)=>{ const line = JSON.stringify(obj); fs.appendFileSync(eventsFile, line+'\n','utf-8'); logs.push(line); };
-    write({ ts: now, kind:'agent_test_start', status:'ok', agent, data:{ prompt: (prompt||'').slice(0,200) } });
-    write({ ts: now+0.1, kind:'agent_test_output', status:'ok', agent, data:{ message:'Test executed (stub)' } });
+    write({ ts: now, kind:'agent_test_start', status:'ok', agent, data:{ prompt: (prompt||'').slice(0,200), projectPath: projectPath||null } });
+    // Stubbed execution: echo back input/prompt
+    const output = {
+      echo: (input && typeof input === 'object') ? input : { prompt },
+      agent,
+      projectPath: projectPath||null,
+    };
+    write({ ts: now+0.1, kind:'agent_test_output', status:'ok', agent, data:{ message:'Test executed (stub)', output } });
     write({ ts: now+0.2, kind:'agent_test_end', status:'ok', agent });
-    res.json({ ok:true, logs });
+    res.json({ ok:true, logs, output });
   } catch (e) { res.status(500).json({ error:String(e) }); }
 });
 
@@ -461,6 +574,410 @@ app.get('/api/skills', async (_req, res) => { try{ const skills = await readYAML
 app.post('/api/skills/save', async (req, res) => { try{ ensureDirs(); const { skills } = req.body||{}; await writeYAMLList(skillsFile,'skills', skills||[]); res.json({ ok:true }); } catch(e){ res.status(500).json({ error:String(e) }); } });
 app.get('/api/skills/history', (req,res)=>{ try{ if(!fs.existsSync(backupDir)) return res.json({ backups:[] }); const files = fs.readdirSync(backupDir).filter(f=>/^skills\.\d+\.yml$/.test(f)).map(name=>({ name, ts: parseInt(name.split('.')[1],10) })); res.json({ backups: files.sort((a,b)=>b.ts-a.ts)}); } catch(e){ res.status(500).json({ error:String(e) }); } });
 app.post('/api/skills/rollback', (req,res)=>{ try{ ensureDirs(); const { name } = req.body||{}; const src = path.join(backupDir, name); if(!fs.existsSync(src)) return res.status(404).json({ error:'not found' }); fs.copyFileSync(src, skillsFile); res.json({ ok:true }); } catch(e){ res.status(500).json({ error:String(e) }); } });
+
+// ============================================================================
+// APPROVALS WORKFLOW API - Real-time Queue with SSE, Audit Trail, Role-based Access
+// ============================================================================
+
+const approvalStreams = new Set();
+
+function loadApprovals() {
+  try {
+    if (!fs.existsSync(approvalsFile)) return [];
+    return JSON.parse(fs.readFileSync(approvalsFile, 'utf-8')).approvals || [];
+  } catch { return []; }
+}
+
+function saveApprovals(approvals) {
+  try {
+    fs.writeFileSync(approvalsFile, JSON.stringify({ approvals }, null, 2), 'utf-8');
+  } catch (e) { logger.error('Failed to save approvals:', e); }
+}
+
+function logAuditEntry(entry) {
+  try {
+    const line = JSON.stringify({ ...entry, timestamp: new Date().toISOString() });
+    fs.appendFileSync(auditLogFile, line + '\n', 'utf-8');
+    // Broadcast to audit listeners
+    const msg = `event: audit-entry\ndata: ${line}\n\n`;
+    approvalStreams.forEach(stream => {
+      try { stream.write(msg); } catch {}
+    });
+  } catch (e) { logger.error('Failed to log audit entry:', e); }
+}
+
+function broadcastApprovalUpdate(data) {
+  const msg = `event: approval-update\ndata: ${JSON.stringify(data)}\n\n`;
+  approvalStreams.forEach(stream => {
+    try { stream.write(msg); } catch {}
+  });
+}
+
+// Get user role (demo: always admin, real impl would check session/JWT)
+app.get('/api/approvals/role', (req, res) => {
+  res.json({ role: 'admin' }); // In production: decode from JWT/session
+});
+
+// Get approval queue
+app.get('/api/approvals/queue', (req, res) => {
+  try {
+    const approvals = loadApprovals();
+    res.json({ approvals });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Create approval request
+app.post('/api/approvals/create', (req, res) => {
+  try {
+    const schema = Joi.object({
+      title: Joi.string().min(3).max(200).required(),
+      description: Joi.string().min(5).max(2000).required(),
+      type: Joi.string().valid('deployment', 'config-change', 'agent-update', 'access-request', 'budget-increase', 'skill-install', 'project-delete').required(),
+      requester: Joi.string().min(2).max(100).required(),
+      metadata: Joi.object().optional()
+    });
+    
+    const { error, value } = schema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
+    
+    const approvals = loadApprovals();
+    const newApproval = {
+      id: crypto.randomUUID(),
+      ...value,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      approvedBy: null,
+      approvedAt: null,
+      comment: null
+    };
+    
+    approvals.unshift(newApproval);
+    saveApprovals(approvals);
+    
+    logAuditEntry({
+      user: value.requester,
+      action: 'created approval request',
+      target: value.title,
+      details: `Type: ${value.type}`
+    });
+    
+    broadcastApprovalUpdate({ action: 'created', approval: newApproval });
+    
+    res.json({ ok: true, approval: newApproval });
+  } catch (e) {
+    logger.error('Create approval error:', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// Approve request
+app.post('/api/approvals/:id/approve', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { comment } = req.body || {};
+    
+    const approvals = loadApprovals();
+    const approval = approvals.find(a => a.id === id);
+    
+    if (!approval) return res.status(404).json({ error: 'Approval request not found' });
+    if (approval.status !== 'pending') return res.status(400).json({ error: 'Request already processed' });
+    
+    approval.status = 'approved';
+    approval.approvedBy = 'Admin User'; // In production: get from session
+    approval.approvedAt = new Date().toISOString();
+    approval.comment = comment || null;
+    
+    saveApprovals(approvals);
+    
+    logAuditEntry({
+      user: approval.approvedBy,
+      action: 'approved',
+      target: approval.title,
+      details: comment || 'No comment provided'
+    });
+    
+    broadcastApprovalUpdate({ action: 'updated', id, approval });
+    
+    res.json({ ok: true });
+  } catch (e) {
+    logger.error('Approve error:', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// Reject request
+app.post('/api/approvals/:id/reject', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 3) {
+      return res.status(400).json({ error: 'Rejection reason is required (min 3 characters)' });
+    }
+    
+    const approvals = loadApprovals();
+    const approval = approvals.find(a => a.id === id);
+    
+    if (!approval) return res.status(404).json({ error: 'Approval request not found' });
+    if (approval.status !== 'pending') return res.status(400).json({ error: 'Request already processed' });
+    
+    approval.status = 'rejected';
+    approval.approvedBy = 'Admin User'; // In production: get from session
+    approval.approvedAt = new Date().toISOString();
+    approval.comment = reason;
+    
+    saveApprovals(approvals);
+    
+    logAuditEntry({
+      user: approval.approvedBy,
+      action: 'rejected',
+      target: approval.title,
+      details: reason
+    });
+    
+    broadcastApprovalUpdate({ action: 'updated', id, approval });
+    
+    res.json({ ok: true });
+  } catch (e) {
+    logger.error('Reject error:', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// Get audit log
+app.get('/api/approvals/audit', (req, res) => {
+  try {
+    if (!fs.existsSync(auditLogFile)) return res.json({ audit: [] });
+    const lines = fs.readFileSync(auditLogFile, 'utf-8').trim().split('\n').filter(Boolean);
+    const audit = lines.slice(-200).map(l => {
+      try { return JSON.parse(l); } catch { return null; }
+    }).filter(Boolean).reverse();
+    res.json({ audit });
+  } catch (e) {
+    logger.error('Get audit log error:', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// Export audit log
+app.get('/api/approvals/audit/export', (req, res) => {
+  try {
+    if (!fs.existsSync(auditLogFile)) return res.json({ entries: [] });
+    const content = fs.readFileSync(auditLogFile, 'utf-8');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-log-${Date.now()}.json"`);
+    res.send(content);
+  } catch (e) {
+    logger.error('Export audit log error:', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// SSE stream for real-time approval updates
+app.get('/api/approvals/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  
+  approvalStreams.add(res);
+  logger.info('Approval SSE client connected');
+  
+  // Send initial data
+  res.write(`: connected\n\n`);
+  
+  req.on('close', () => {
+    approvalStreams.delete(res);
+    logger.info('Approval SSE client disconnected');
+  });
+});
+
+// ============================================================================
+// ENHANCED ANALYTICS API - Real-time Per-Project KPIs with SSE
+// ============================================================================
+
+const analyticsStreams = new Set();
+
+function aggregateAnalytics(projectId = null, window = '24h') {
+  try {
+    const windowMs = parseTimeWindow(window);
+    const since = Date.now() - windowMs;
+    
+    // Load events
+    let events = [];
+    if (fs.existsSync(eventsFile)) {
+      const lines = fs.readFileSync(eventsFile, 'utf-8').trim().split('\n').filter(Boolean);
+      events = lines.map(l => {
+        try {
+          const ev = JSON.parse(l);
+          ev.tsMs = (ev.ts || 0) * 1000;
+          return ev;
+        } catch { return null; }
+      }).filter(e => e && e.tsMs >= since);
+    }
+    
+    // Filter by project if specified
+    if (projectId) {
+      events = events.filter(e => e.projectId === projectId || e.project === projectId);
+    }
+    
+    // Aggregate metrics
+    const totalRuns = events.filter(e => e.kind === 'agent_response' || e.kind === 'prompt_run').length;
+    const errors = events.filter(e => e.status === 'error').length;
+    const successRate = totalRuns > 0 ? (totalRuns - errors) / totalRuns : 0;
+    
+    const latencies = [];
+    const reqMap = new Map();
+    events.forEach(e => {
+      if (e.kind === 'agent_request') reqMap.set(e.agent, e.tsMs);
+      if (e.kind === 'agent_response' && reqMap.has(e.agent)) {
+        const start = reqMap.get(e.agent);
+        latencies.push(e.tsMs - start);
+        reqMap.delete(e.agent);
+      }
+    });
+    const avgLatency = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+    
+    // Cost estimation (stub)
+    const totalCost = (totalRuns * 0.01).toFixed(2);
+    
+    // Active agents
+    const agentSet = new Set();
+    events.forEach(e => { if (e.agent) agentSet.add(e.agent); });
+    const activeAgents = agentSet.size;
+    
+    const errorRate = totalRuns > 0 ? errors / totalRuns : 0;
+    
+    // Trends (hourly buckets)
+    const buckets = 24;
+    const bucketSize = windowMs / buckets;
+    const runBuckets = new Array(buckets).fill(0);
+    const successBuckets = new Array(buckets).fill(0);
+    const latencyBuckets = new Array(buckets).fill(0);
+    
+    events.forEach(e => {
+      const bucket = Math.floor((e.tsMs - since) / bucketSize);
+      if (bucket >= 0 && bucket < buckets) {
+        if (e.kind === 'agent_response') runBuckets[bucket]++;
+        if (e.kind === 'agent_response' && e.status !== 'error') successBuckets[bucket]++;
+      }
+    });
+    
+    // Agent usage distribution
+    const agentUsage = {};
+    events.forEach(e => {
+      if (e.agent && e.kind === 'agent_response') {
+        agentUsage[e.agent] = (agentUsage[e.agent] || 0) + 1;
+      }
+    });
+    
+    // Cost by model (stub)
+    const costByModel = {
+      'claude-3': (totalRuns * 0.004).toFixed(2),
+      'gpt-4': (totalRuns * 0.003).toFixed(2),
+      'deepseek': (totalRuns * 0.002).toFixed(2),
+      'claude-haiku': (totalRuns * 0.001).toFixed(2)
+    };
+    
+    return {
+      totalRuns,
+      successRate,
+      avgLatency: Math.round(avgLatency),
+      totalCost: parseFloat(totalCost),
+      activeAgents,
+      errorRate,
+      trends: {
+        runs: runBuckets,
+        success: successBuckets.map((s, i) => runBuckets[i] > 0 ? Math.round((s / runBuckets[i]) * 100) : 0),
+        latency: latencyBuckets
+      },
+      agentUsage,
+      costByModel,
+      latencyDist: [45, 67, 89, 112, 98, 76, 54, 32, 21, 10] // Stub histogram
+    };
+  } catch (e) {
+    logger.error('Analytics aggregation error:', e);
+    return null;
+  }
+}
+
+function parseTimeWindow(window) {
+  const match = /^(\d+)(h|d|m)$/.exec(window);
+  if (!match) return 24 * 60 * 60 * 1000; // Default 24h
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  if (unit === 'h') return value * 60 * 60 * 1000;
+  if (unit === 'd') return value * 24 * 60 * 60 * 1000;
+  if (unit === 'm') return value * 60 * 1000;
+  return 24 * 60 * 60 * 1000;
+}
+
+// Get analytics KPIs
+app.get('/api/analytics/kpi', (req, res) => {
+  try {
+    const { window = '24h', projectId } = req.query;
+    const data = aggregateAnalytics(projectId, window);
+    res.json(data || {});
+  } catch (e) {
+    logger.error('Analytics KPI error:', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// Get agent performance metrics
+app.get('/api/analytics/agents', async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const agents = await readYAMLList(agentsFile, 'agents');
+    
+    // Aggregate per-agent metrics
+    const agentMetrics = agents.map(agent => {
+      const name = agent.name || 'unknown';
+      // Stub data - real implementation would aggregate from events
+      return {
+        name,
+        runs: Math.floor(Math.random() * 100) + 10,
+        successRate: 0.85 + Math.random() * 0.15,
+        avgLatency: Math.floor(Math.random() * 500) + 200,
+        errors: Math.floor(Math.random() * 10),
+        cost: (Math.random() * 5).toFixed(2),
+        health: Math.random() > 0.2 ? 'healthy' : 'degraded'
+      };
+    });
+    
+    res.json({ agents: agentMetrics });
+  } catch (e) {
+    logger.error('Analytics agents error:', e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// SSE stream for real-time analytics
+app.get('/api/analytics/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  
+  analyticsStreams.add(res);
+  logger.info('Analytics SSE client connected');
+  
+  // Send updates every 5 seconds
+  const interval = setInterval(() => {
+    try {
+      const data = aggregateAnalytics();
+      res.write(`event: analytics-update\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch (e) {
+      logger.error('Analytics SSE error:', e);
+    }
+  }, 5000);
+  
+  req.on('close', () => {
+    clearInterval(interval);
+    analyticsStreams.delete(res);
+    logger.info('Analytics SSE client disconnected');
+  });
+});
 
 app.get('/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -1522,9 +2039,84 @@ app.get('/api/marketplace/items', (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+async function attachMarketplaceItemToProject(item, projectId) {
+  try {
+    if (!projectId) return { ok: true, changed: false };
+    const projects = loadProjects();
+    const project = projects.find(p => p.id === projectId);
+    if (!project || !project.path) return { ok: false, reason: 'project_not_found' };
+
+    const { agentsFilePath, skillsFilePath } = getAgentsFilesForPath(project.path);
+    const agents = await readYAMLList(agentsFilePath, 'agents');
+    const skills = await readYAMLList(skillsFilePath, 'skills');
+
+    let changed = false;
+
+    if (item.type === 'skill') {
+      const skillName = item.name;
+      if (!skills.some(s => s?.name === skillName)) {
+        skills.push({
+          name: skillName,
+          description: item.description,
+          fromMarketplace: true,
+          marketplaceId: item.id,
+          tags: item.tags || [],
+        });
+        changed = true;
+      }
+    }
+
+    if (item.type === 'agent') {
+      const agentName = item.name;
+      if (!agents.some(a => a?.name === agentName)) {
+        const newAgent = {
+          name: agentName,
+          role: 'executor',
+          model: 'router',
+          skills: [],
+          fromMarketplace: true,
+          marketplaceId: item.id,
+        };
+        const deps = item.dependencies || [];
+        const catalog = loadMarketplace();
+        for (const depId of deps) {
+          const dep = catalog.find(i => i.id === depId);
+          if (dep && dep.type === 'skill') {
+            const skillName = dep.name;
+            if (!skills.some(s => s?.name === skillName)) {
+              skills.push({
+                name: skillName,
+                description: dep.description,
+                fromMarketplace: true,
+                marketplaceId: dep.id,
+                tags: dep.tags || [],
+              });
+            }
+            if (!newAgent.skills.includes(skillName)) newAgent.skills.push(skillName);
+          }
+        }
+        agents.push(newAgent);
+        changed = true;
+      }
+    }
+
+    if (!changed) return { ok: true, changed: false };
+
+    const v = await (await fetchLikeValidate({ agents, skills })).json();
+    if (!v.ok) return { ok: false, validationErrors: v.errors };
+
+    await writeYAMLList(agentsFilePath, 'agents', agents);
+    await writeYAMLList(skillsFilePath, 'skills', skills);
+    logChange('marketplace_attach', { projectId, itemId: item.id, name: item.name });
+    return { ok: true, changed: true };
+  } catch (e) {
+    return { ok: false, reason: String(e) };
+  }
+}
+
 app.post('/api/marketplace/install', async (req, res) => {
   try {
-    const { id } = req.body || {};
+    const { id, projectId } = req.body || {};
     if (!id) return res.status(400).json({ error: 'Missing item id' });
     
     const items = loadMarketplace();
@@ -1533,6 +2125,10 @@ app.post('/api/marketplace/install', async (req, res) => {
     
     const installed = loadInstalled();
     if (installed.includes(id)) {
+      // Still attach to project if needed
+      if (projectId) {
+        await attachMarketplaceItemToProject(item, projectId);
+      }
       return res.json({ ok: true, message: 'Already installed' });
     }
     
@@ -1542,17 +2138,26 @@ app.post('/api/marketplace/install', async (req, res) => {
       return res.status(400).json({ error: 'Missing dependencies', missing });
     }
     
-    // Install item
+    // Install item globally
     installed.push(id);
     saveInstalled(installed);
+
+    // Attach to project config if projectId provided
+    let attachResult = { ok: true };
+    if (projectId) {
+      attachResult = await attachMarketplaceItemToProject(item, projectId);
+      if (!attachResult.ok) {
+        return res.status(400).json({ error: 'Attach failed', details: attachResult });
+      }
+    }
     
     // Log event
-    fs.appendFileSync(eventsFile, JSON.stringify({ ts: Date.now()/1000, kind: 'marketplace_install', data: { id, name: item.name, type: item.type } }) + '\n', 'utf-8');
+    fs.appendFileSync(eventsFile, JSON.stringify({ ts: Date.now()/1000, kind: 'marketplace_install', data: { id, name: item.name, type: item.type, projectId: projectId||null } }) + '\n', 'utf-8');
     
     // Send notification
     addNotification('success', 'Install Complete', `${item.name} has been installed successfully`);
     
-    res.json({ ok: true, item });
+    res.json({ ok: true, item, attached: !!projectId });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
@@ -1774,6 +2379,9 @@ wss.on('connection', (ws) => {
   // Create persistent shell session (node-pty would be better, but spawn works for MVP)
   let currentProcess = null;
   
+  let currentCommand = '';
+  let currentOutput = '';
+  
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString());
@@ -1781,6 +2389,8 @@ wss.on('connection', (ws) => {
       if (msg.type === 'command' && msg.data) {
         const cmd = msg.data.trim();
         if (!cmd) return;
+        currentCommand = cmd;
+        currentOutput = '';
         
         // Log command
         const append = (obj) => {
@@ -1789,6 +2399,17 @@ wss.on('connection', (ws) => {
         };
         append({ kind: 'term_start', cmd, sessionId });
         
+        // Resolve working directory (scoped to repoRoot)
+        let cwd = repoRoot;
+        if (typeof msg.cwd === 'string' && msg.cwd) {
+          try {
+            const resolved = path.resolve(msg.cwd);
+            if (resolved.startsWith(repoRoot)) {
+              cwd = resolved;
+            }
+          } catch {}
+        }
+        
         // Execute command
         const shell = process.platform === 'win32' ? 'pwsh' : 'bash';
         const args = process.platform === 'win32' 
@@ -1796,31 +2417,49 @@ wss.on('connection', (ws) => {
           : ['-c', cmd];
         
         currentProcess = spawn(shell, args, {
-          cwd: repoRoot,
+          cwd,
           env: process.env
         });
         
         currentProcess.stdout.on('data', (chunk) => {
           const output = chunk.toString();
           ws.send(JSON.stringify({ type: 'output', data: output }));
-          append({ kind: 'term', stream: 'stdout', data: output, sessionId });
+          currentOutput += output;
+          append({ kind: 'term', stream: 'stdout', data: output, sessionId, cwd });
         });
         
         currentProcess.stderr.on('data', (chunk) => {
           const output = chunk.toString();
           ws.send(JSON.stringify({ type: 'output', data: output }));
-          append({ kind: 'term', stream: 'stderr', data: output, sessionId });
+          currentOutput += output;
+          append({ kind: 'term', stream: 'stderr', data: output, sessionId, cwd });
         });
         
         currentProcess.on('close', (code) => {
           ws.send(JSON.stringify({ type: 'output', data: `\r\n\x1b[36m$\x1b[0m ` }));
-          append({ kind: 'term_end', code, sessionId });
+          append({ kind: 'term_end', code, sessionId, cwd });
+          
+          // Notify Prompt Factory of completed command + output (truncated to 8000 chars)
+          const safeOutput = currentOutput.length > 8000
+            ? currentOutput.slice(0, 8000) + '\n... [truncated]'
+            : currentOutput;
+          if (safeOutput.trim()) {
+            ws.send(JSON.stringify({
+              type: 'command_complete',
+              command: currentCommand,
+              output: safeOutput,
+              code,
+            }));
+          }
+          
           currentProcess = null;
+          currentCommand = '';
+          currentOutput = '';
         });
         
         currentProcess.on('error', (err) => {
           ws.send(JSON.stringify({ type: 'output', data: `\r\n\x1b[31mError: ${err.message}\x1b[0m\r\n` }));
-          append({ kind: 'term_error', error: err.message, sessionId });
+          append({ kind: 'term_error', error: err.message, sessionId, cwd });
         });
       }
     } catch (err) {

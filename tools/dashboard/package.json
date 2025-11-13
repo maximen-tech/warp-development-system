@@ -8,8 +8,13 @@
   },
   "dependencies": {
     "chokidar": "^3.6.0",
+    "dotenv": "^17.2.3",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "joi": "^18.0.1",
     "node-fetch": "^3.3.2",
+    "winston": "^3.18.3",
     "ws": "^8.18.0",
     "yaml": "^2.8.1"
   }
