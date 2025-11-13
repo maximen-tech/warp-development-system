@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marketplace - Warp Dashboard</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/marketplace.css" />
+</head>
+<body>
+  <header>
+    <strong>Marketplace</strong>
+    <a class="pill" href="/" style="text-decoration:none;">← Dashboard</a>
+    <a class="pill" href="/agents.html" style="text-decoration:none;">Agents</a>
+    <a class="pill" href="/library.html" style="text-decoration:none;">📚 Library</a>
+    <div class="controls">
+      <span id="cart-count" class="pill">Cart (0)</span>
+      <button class="pill" onclick="toggleInstalled()">📦 Installed</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="marketplace-header">
+      <div class="search-section">
+        <input id="searchInput" type="text" placeholder="Search skills, agents, workflows..." class="search-input" />
+        <button class="pill" onclick="clearSearch()">Clear</button>
+      </div>
+      
+      <div class="filter-section">
+        <select id="typeFilter" class="pill">
+          <option value="">All Types</option>
+          <option value="skill">Skills</option>
+          <option value="agent">Agents</option>
+          <option value="workflow">Workflows</option>
+        </select>
+        
+        <select id="sortBy" class="pill">
+          <option value="downloads">Most Downloaded</option>
+          <option value="rating">Highest Rated</option>
+          <option value="name">Name A-Z</option>
+          <option value="newest">Newest</option>
+        </select>
+        
+        <div class="tag-filters" id="tagFilters"></div>
+      </div>
+    </div>
+
+    <div class="marketplace-stats">
+      <span id="resultsCount">Loading...</span>
+      <span class="separator">•</span>
+      <span id="installedCount">0 installed</span>
+    </div>
+
+    <div class="marketplace-grid" id="itemsGrid">
+      <div class="loading">Loading marketplace items...</div>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div id="previewModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Item Details</h2>
+        <button class="modal-close" onclick="closePreview()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="item-preview">
+          <div class="preview-main">
+            <div class="item-icon" id="modalIcon">📦</div>
+            <div class="item-info">
+              <h3 id="modalName"></h3>
+              <div class="item-meta">
+                <span class="item-type" id="modalType"></span>
+                <span class="item-version" id="modalVersion"></span>
+                <span class="item-author" id="modalAuthor"></span>
+              </div>
+              <div class="item-rating" id="modalRating"></div>
+            </div>
+          </div>
+          
+          <div class="preview-description">
+            <h4>Description</h4>
+            <p id="modalDescription"></p>
+          </div>
+          
+          <div class="preview-tags">
+            <h4>Tags</h4>
+            <div id="modalTags"></div>
+          </div>
+          
+          <div class="preview-dependencies" id="modalDependencies"></div>
+          
+          <div class="preview-stats">
+            <div class="stat">
+              <span class="stat-value" id="modalDownloads"></span>
+              <span class="stat-label">Downloads</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value" id="modalRatingValue"></span>
+              <span class="stat-label">Rating</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="pill secondary" onclick="closePreview()">Close</button>
+        <button class="pill rate-button" onclick="rateItem()">Rate Item</button>
+        <button class="pill primary install-button" id="modalInstallBtn" onclick="installFromModal()">Install</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/marketplace.js"></script>
+</body>
+</html>

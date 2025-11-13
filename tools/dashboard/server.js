@@ -1088,6 +1088,155 @@ app.post('/api/notifications/demo', (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// Marketplace system
+const marketplaceFile = path.join(runtimeDir, 'marketplace_catalog.json');
+const installedFile = path.join(runtimeDir, 'installed_items.json');
+
+function ensureMarketplaceFile() {
+  if (!fs.existsSync(marketplaceFile)) {
+    const sampleItems = {
+      items: [
+        { id: 'skill-terminal-pro', type: 'skill', name: 'Terminal Pro', description: 'Advanced terminal operations with safety checks', version: '2.1.0', rating: 4.8, downloads: 1250, tags: ['terminal', 'safety'], author: 'warp-team', price: 0, dependencies: [] },
+        { id: 'agent-code-reviewer', type: 'agent', name: 'Code Reviewer', description: 'AI-powered code review agent with security analysis', version: '1.5.2', rating: 4.9, downloads: 890, tags: ['code', 'security', 'review'], author: 'community', price: 0, dependencies: ['skill-terminal-pro'] },
+        { id: 'workflow-ci-cd', type: 'workflow', name: 'CI/CD Pipeline', description: 'Complete CI/CD workflow with testing and deployment', version: '3.0.1', rating: 4.7, downloads: 2100, tags: ['ci', 'cd', 'deployment'], author: 'warp-team', price: 0, dependencies: ['skill-terminal-pro'] },
+        { id: 'skill-docker-manager', type: 'skill', name: 'Docker Manager', description: 'Container management and orchestration skill', version: '1.8.0', rating: 4.6, downloads: 650, tags: ['docker', 'containers'], author: 'community', price: 0, dependencies: [] },
+        { id: 'agent-security-scanner', type: 'agent', name: 'Security Scanner', description: 'Automated security vulnerability scanning', version: '2.2.0', rating: 4.5, downloads: 420, tags: ['security', 'scanning'], author: 'security-team', price: 0, dependencies: ['skill-terminal-pro', 'skill-docker-manager'] }
+      ]
+    };
+    fs.writeFileSync(marketplaceFile, JSON.stringify(sampleItems, null, 2), 'utf-8');
+  }
+  if (!fs.existsSync(installedFile)) {
+    fs.writeFileSync(installedFile, JSON.stringify({ installed: [] }, null, 2), 'utf-8');
+  }
+}
+
+function loadMarketplace() {
+  try {
+    ensureMarketplaceFile();
+    return JSON.parse(fs.readFileSync(marketplaceFile, 'utf-8')).items || [];
+  } catch { return []; }
+}
+
+function loadInstalled() {
+  try {
+    return JSON.parse(fs.readFileSync(installedFile, 'utf-8')).installed || [];
+  } catch { return []; }
+}
+
+function saveInstalled(installed) {
+  try {
+    fs.writeFileSync(installedFile, JSON.stringify({ installed }, null, 2), 'utf-8');
+  } catch {}
+}
+
+// Marketplace API endpoints
+app.get('/api/marketplace/items', (req, res) => {
+  try {
+    const { search, type, tag, sort = 'downloads' } = req.query;
+    let items = loadMarketplace();
+    const installed = loadInstalled();
+    
+    // Mark installed items
+    items = items.map(item => ({ ...item, installed: installed.includes(item.id) }));
+    
+    // Apply filters
+    if (search) {
+      const query = search.toLowerCase();
+      items = items.filter(item => 
+        item.name.toLowerCase().includes(query) || 
+        item.description.toLowerCase().includes(query) ||
+        item.tags.some(tag => tag.toLowerCase().includes(query))
+      );
+    }
+    
+    if (type) items = items.filter(item => item.type === type);
+    if (tag) items = items.filter(item => item.tags.includes(tag));
+    
+    // Apply sorting
+    items.sort((a, b) => {
+      switch (sort) {
+        case 'rating': return b.rating - a.rating;
+        case 'name': return a.name.localeCompare(b.name);
+        case 'newest': return b.version.localeCompare(a.version);
+        default: return b.downloads - a.downloads; // downloads
+      }
+    });
+    
+    res.json({ items, total: items.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post('/api/marketplace/install', async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'Missing item id' });
+    
+    const items = loadMarketplace();
+    const item = items.find(i => i.id === id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    
+    const installed = loadInstalled();
+    if (installed.includes(id)) {
+      return res.json({ ok: true, message: 'Already installed' });
+    }
+    
+    // Check dependencies
+    const missing = item.dependencies?.filter(dep => !installed.includes(dep)) || [];
+    if (missing.length > 0) {
+      return res.status(400).json({ error: 'Missing dependencies', missing });
+    }
+    
+    // Install item
+    installed.push(id);
+    saveInstalled(installed);
+    
+    // Log event
+    fs.appendFileSync(eventsFile, JSON.stringify({ ts: Date.now()/1000, kind: 'marketplace_install', data: { id, name: item.name, type: item.type } }) + '\n', 'utf-8');
+    
+    // Send notification
+    addNotification('success', 'Install Complete', `${item.name} has been installed successfully`);
+    
+    res.json({ ok: true, item });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post('/api/marketplace/uninstall', (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'Missing item id' });
+    
+    const installed = loadInstalled();
+    const index = installed.indexOf(id);
+    if (index === -1) return res.status(404).json({ error: 'Item not installed' });
+    
+    installed.splice(index, 1);
+    saveInstalled(installed);
+    
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.get('/api/marketplace/installed', (req, res) => {
+  try {
+    const installed = loadInstalled();
+    const items = loadMarketplace().filter(item => installed.includes(item.id));
+    res.json({ items });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post('/api/marketplace/rate', (req, res) => {
+  try {
+    const { id, rating } = req.body || {};
+    if (!id || !rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Invalid rating' });
+    }
+    
+    // For demo, just acknowledge - real implementation would update ratings
+    addNotification('info', 'Rating Submitted', `Thanks for rating this item!`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 // WebSocket server for terminal streaming
 const wss = new WebSocketServer({ noServer: true });
 const terminalSessions = new Map();
