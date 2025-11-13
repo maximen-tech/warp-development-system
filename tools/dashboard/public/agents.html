@@ -16,6 +16,9 @@
       .grid-cards{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}
       .kv{display:grid;grid-template-columns:140px 1fr;gap:8px;align-items:center;margin:6px 0}
       .kv input, .kv select, .kv textarea{width:100%}
+      .err-cell{background-color:rgba(255,0,0,.15);border:1px solid var(--warn)}
+      .err-hint{color:var(--warn);font-size:0.8em;margin-top:2px}
+      .imp-batch{background:var(--panel);padding:8px;border:1px solid var(--border);border-radius:6px;margin:8px 0}
       @media(max-width:900px){ .grid-cards{grid-template-columns:1fr} }
     </style>
   </head>
@@ -152,7 +155,7 @@
     </div>
 
     <script>
-      const S = { agents: [], skills: [], status:{}, filter:'', timers:{}, sortBy: (localStorage.getItem('agents.sortBy')||'manual'), autoExpandErr: (localStorage.getItem('agents.autoExpandErr')==='1'), errSeen: {}, lastAutoExpandTs: 0 };
+      const S = { agents: [], skills: [], status:{}, filter:'', timers:{}, sortBy: (localStorage.getItem('agents.sortBy')||'manual'), autoExpandErr: (localStorage.getItem('agents.autoExpandErr')==='1'), errSeen: {}, lastAutoExpandTs: 0, importBatch: null, importErrors: {} };
       const qs = (s,el=document)=>el.querySelector(s);
       const qsa = (s,el=document)=>Array.from(el.querySelectorAll(s));
       function showModal(on){ qs('#editorModal').style.display = on?'flex':'none'; }
