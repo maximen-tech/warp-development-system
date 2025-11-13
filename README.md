@@ -57,6 +57,22 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
 | transition            | row with phase badge                          | state moved |
 | agent_request/response| row with agent + usage                        | model call  |
 | action_proposed       | row with command + approval badge (auto/manual) | requires attention if manual |
+| approval_granted      | timeline entry + approvals queue update       | unlock next step |
 | validation_summary    | row with summary bullets count                | ready to review |
 | end                   | row with green status                         | run finished |
 | error                 | red row with error text                       | investigate; retries may apply |
+
+## Dashboard advanced features
+- APIs
+  - GET /api/artifacts, GET /api/artifact/plan, GET /api/artifact/download/:name
+  - POST /api/events/append (append custom event; e.g., approval_granted)
+  - GET /api/console, POST /api/clear-console
+  - GET /api/runs/segments, GET /api/runs/export/:idx
+  - GET /api/agents, POST /api/agents/validate, PUT /api/agents
+  - GET/POST /api/theme
+- UI modules
+  - Overview (counters), Timeline, Approvals queue, Artifacts (preview+download), Analytics (sparkline/heatmap), Console (live tail), Agents (YAML editor+diff), Runs (segments+export)
+- Extensibility
+  - Append any event via /api/events/append
+  - Add new artifacts by writing files into runtime/ (supported: .md, .json, .txt, .diff, .log)
+  - Customize layout: drag & drop panels; order persisted in localStorage (key layout:v1)
