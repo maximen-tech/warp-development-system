@@ -8,6 +8,7 @@ import os
 import json
 import shutil
 import fnmatch
+import time
 
 from .config import load_agent_config
 from .logging import log_event
@@ -57,6 +58,47 @@ class _SimpleRunner:  # minimal shim with invoke() to mirror LangGraph compiled 
         self._nodes = [plan_step, execute_step, validate_step]
         self._retries = retries
 
+    def _await_approvals(self, state: Dict[str, Any]) -> None:
+        approvals = state.get("approvals") or []
+        if not approvals:
+            return
+        pending = set([a.get("actionId") for a in approvals if a.get("actionId")])
+        approve_all_on_any = not pending  # if no actionId, any approval_granted unlocks
+        events_path = os.path.join(_runtime_dir(), "events.jsonl")
+        start_size = os.path.getsize(events_path) if os.path.exists(events_path) else 0
+        deadline = time.time() + float((state.get("constraints") or {}).get("approval_timeout", 600))
+        log_event("waiting_for_approval", {"runId": state.get("runId"), "pending": list(pending)})
+        while time.time() < deadline:
+            # read new tail
+            try:
+                if os.path.exists(events_path):
+                    size = os.path.getsize(events_path)
+                    if size > start_size:
+                        with open(events_path, "r", encoding="utf-8") as f:
+                            f.seek(start_size)
+                            chunk = f.read()
+                            start_size = size
+                        for line in (chunk.strip().split("\n") if chunk else []):
+                            if not line.strip():
+                                continue
+                            ev = json.loads(line)
+                            if ev.get("kind") == "approval_granted":
+                                data = ev.get("data") or {}
+                                action_id = data.get("actionId")
+                                if approve_all_on_any or (action_id and action_id in pending):
+                                    if action_id in pending:
+                                        pending.discard(action_id)
+                                    log_event("approval_consumed", {"runId": state.get("runId"), "actionId": action_id})
+                                    if approve_all_on_any or not pending:
+                                        state["status"] = "approved"
+                                        return
+            except Exception:
+                pass
+            time.sleep(1.0)
+        # timeout
+        log_event("error", {"reason": "approval_timeout", "pending": list(pending)}, status="error")
+        state["status"] = "failed"
+
     def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
         for fn in self._nodes:
             attempt = 0
@@ -64,11 +106,14 @@ class _SimpleRunner:  # minimal shim with invoke() to mirror LangGraph compiled 
                 try:
                     updates = fn(state)
                     state.update(updates or {})
-                    log_event("transition", {"node": fn.__name__}, phase=fn.__name__, status=state.get("status"))
+                    log_event("transition", {"node": fn.__name__, "runId": state.get("runId")}, phase=fn.__name__, status=state.get("status"))
+                    # pause for approvals after execution phase
+                    if fn is execute_step and state.get("status") == "awaiting_approval":
+                        self._await_approvals(state)
                     break
                 except Exception as e:  # guard + retry
                     attempt += 1
-                    log_event("error", {"node": fn.__name__}, phase=fn.__name__, status="error", error=str(e))
+                    log_event("error", {"node": fn.__name__, "runId": state.get("runId")}, phase=fn.__name__, status="error", error=str(e))
                     if attempt > self._retries:
                         state["status"] = "failed"
                         return state
@@ -96,6 +141,7 @@ def build_graph(retries: int = 1):
 def run_goal(goal: str, constraints: Optional[Dict[str, Any]] = None, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     cfg = load_agent_config(os.path.dirname(os.path.dirname(__file__)))
     retries = int((constraints or {}).get("retries", 1))
+    run_id = str(os.urandom(8).hex())
     state: Dict[str, Any] = {
         "goal": goal,
         "constraints": constraints or {},
@@ -107,14 +153,15 @@ def run_goal(goal: str, constraints: Optional[Dict[str, Any]] = None, context: O
         "config": cfg.__dict__,
         "approvals": [],
         "history": [],
+        "runId": run_id,
     }
-    log_event("start", {"goal": goal, "retries": retries})
+    log_event("start", {"goal": goal, "retries": retries, "runId": run_id})
     engine = build_graph(retries=retries)
     try:
         result = engine.invoke(state)
     except Exception as e:
-        log_event("error", {"stage": "engine"}, status="failed", error=str(e))
+        log_event("error", {"stage": "engine", "runId": run_id}, status="failed", error=str(e))
         state["status"] = "failed"
         result = state
-    log_event("end", {"status": result.get("status")})
+    log_event("end", {"status": result.get("status"), "runId": run_id})
     return result
