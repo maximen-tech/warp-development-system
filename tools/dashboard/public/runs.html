@@ -16,7 +16,10 @@
         <div class="card">
           <div class="row" style="justify-content:space-between;">
             <span>Run segments</span>
-            <button id="refresh" class="pill">Refresh</button>
+            <div class="row" style="gap:8px">
+              <input id="agentFilter" class="pill" placeholder="Filter by agent (optional)"/>
+              <button id="refresh" class="pill">Refresh</button>
+            </div>
           </div>
           <div id="runs"></div>
         </div>
@@ -33,6 +36,11 @@
       const runsEl = document.getElementById('runs');
       const eventsEl = document.getElementById('events');
       const downloadEl = document.getElementById('download');
+      const agentInput = document.getElementById('agentFilter');
+      // Read query param agent
+      const qp = new URLSearchParams(location.search);
+      const preAgent = qp.get('agent')||''; if(preAgent){ agentInput.value = preAgent; }
+      function highlightAgent(text, agent){ if(!agent) return text; try{ return text.split(/\n/).map(l=> l.includes(`"agent":"${agent}`) ? `> ${l}` : l).join('\n'); }catch{return text} }
       async function load(){
         const meta = await (await fetch('/api/runs/segments')).json();
         runsEl.innerHTML='';
@@ -42,23 +50,20 @@
           row.style.justifyContent='space-between';
           row.innerHTML = `<span class=\"small\">Run #${r.idx} · ${r.count} ev · ${r.errors} err · ${r.approvals} approvals ${r.runId?`· id=${r.runId}`:''}</span><span class=\"row\"><button class=\"pill\" data-act=\"open\">Open</button><button class=\"pill\" data-act=\"replay\">Replay</button><a class=\"pill\" data-act=\"kpi-json\" href=\"#\">KPI JSON</a><a class=\"pill\" data-act=\"kpi-csv\" href=\"#\">KPI CSV</a></span>`;
           row.querySelector('[data-act="open"]').onclick = async ()=>{
-            const text = await (await fetch(`/api/runs/export/${r.idx}`)).text();
+            let text = await (await fetch(`/api/runs/export/${r.idx}`)).text();
+            text = highlightAgent(text, agentInput.value.trim());
             eventsEl.textContent = text;
             downloadEl.href = `/api/runs/export/${r.idx}`;
           };
           row.querySelector('[data-act=\"kpi-json\"]').onclick = (e)=>{ e.preventDefault(); if(!r.runId) return alert('runId missing'); window.open(`/api/kpi?window=24h&runId=${encodeURIComponent(r.runId)}`,'_blank'); };
           row.querySelector('[data-act=\"kpi-csv\"]').onclick = (e)=>{ e.preventDefault(); if(!r.runId) return alert('runId missing'); window.open(`/api/kpi?window=24h&runId=${encodeURIComponent(r.runId)}&format=csv`,'_blank'); };
-          row.querySelector('[data-act="replay"]').onclick = async ()=>{
-            const goal = prompt('Optional new goal (leave empty to reuse):','');
-            const res = await fetch(`/api/runs/replay/${r.idx}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ goal: goal||undefined }) });
-            const j = await res.json();
-            alert(j.ok ? `Replayed as runId=${j.runId}` : 'Replay failed');
-          };
           runsEl.prepend(row);
         }
       }
       document.getElementById('refresh').onclick = load;
       load();
+      // Auto-open latest run when coming with agent param
+      if(preAgent){ setTimeout(async ()=>{ const firstOpen = runsEl.querySelector('[data-act="open"]'); if(firstOpen) firstOpen.click(); }, 800); }
     </script>
   </body>
 </html>
