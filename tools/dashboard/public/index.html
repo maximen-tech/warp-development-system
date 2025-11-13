@@ -106,9 +106,19 @@
       </div>
     </div>
     <script type="module">
-      import { initDashboard, runScenario, approveNow } from '/app.js';
-      window.runScenario = runScenario; window.approveNow = approveNow;
+      import { initDashboard, runScenario, approveNow, showToast } from '/app.js';
+      window.runScenario = runScenario; window.approveNow = approveNow; window.showToast = showToast;
       initDashboard();
+      // Toast on scenario runs
+      const originalRunScenario = runScenario;
+      window.runScenario = async (name) => {
+        showToast(`Running scenario: ${name}...`, 'info', 3000);
+        try{ await originalRunScenario(name); showToast(`Scenario ${name} completed!`, 'success', 3000); }catch{ showToast(`Scenario ${name} failed`, 'error', 5000); }
+      };
+      const originalApprove = approveNow;
+      window.approveNow = async () => {
+        try{ await originalApprove(); showToast('Approval granted!', 'success', 2000); }catch{ showToast('Approval failed', 'error', 4000); }
+      };
       // drag & drop layout persist
       const wrap = document.querySelector('.wrap');
       function restoreLayout(){
@@ -127,10 +137,11 @@
         const isLight = !document.documentElement.classList.contains('light');
         document.documentElement.classList.toggle('light', isLight);
         await fetch('/api/theme',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ theme: isLight ? 'light' : 'dark' })});
+        showToast(`Theme: ${isLight ? 'Light' : 'Dark'}`, 'success', 2000);
       };
       // approval mode init
       (async ()=>{ try{ const r = await fetch('/api/approval-mode'); const m = (await r.json()).mode; const on = (m||'strict')==='strict'; document.getElementById('toggleStrict').classList.toggle('active', on);}catch{}})();
-      document.getElementById('toggleStrict').onclick = async ()=>{ const on = !document.getElementById('toggleStrict').classList.contains('active'); document.getElementById('toggleStrict').classList.toggle('active', on); await fetch('/api/approval-mode',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mode: on ? 'strict' : 'permissive' })}); };
+      document.getElementById('toggleStrict').onclick = async ()=>{ const on = !document.getElementById('toggleStrict').classList.contains('active'); document.getElementById('toggleStrict').classList.toggle('active', on); await fetch('/api/approval-mode',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mode: on ? 'strict' : 'permissive' })}); showToast(`Approval mode: ${on ? 'Strict' : 'Permissive'}`, 'info', 2500); };
 
       // markdown preview (plan.md)
       async function previewPlan(){

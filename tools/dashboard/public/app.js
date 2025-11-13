@@ -198,3 +198,100 @@ export async function approveNow(actionId, runId){
   const ev = { ts: Date.now()/1000, kind:'approval_granted', status:'ok', data:{ by:'ui', actionId: actionId||null, runId: runId||null } };
   await fetch('/api/events/append',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(ev)});
 }
+
+// Toast Notification System
+let toastIdCounter = 0;
+const toastQueue = [];
+
+export function showToast(message, type = 'info', duration = 0, title = ''){
+  const id = ++toastIdCounter;
+  const toast = { id, message, type, title, duration };
+  toastQueue.push(toast);
+  renderToasts();
+  
+  // Auto-dismiss if duration > 0
+  if(duration > 0){
+    setTimeout(() => dismissToast(id), duration);
+  }
+  
+  return id;
+}
+
+export function dismissToast(id){
+  const idx = toastQueue.findIndex(t => t.id === id);
+  if(idx === -1) return;
+  
+  const toast = toastQueue[idx];
+  const el = document.getElementById(`toast-${id}`);
+  if(el){
+    el.classList.add('removing');
+    setTimeout(() => {
+      toastQueue.splice(idx, 1);
+      renderToasts();
+    }, 300);
+  } else {
+    toastQueue.splice(idx, 1);
+    renderToasts();
+  }
+}
+
+function renderToasts(){
+  let container = document.getElementById('toast-container');
+  if(!container){
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  
+  // Remove toasts no longer in queue
+  const existingIds = Array.from(container.children).map(el => el.id);
+  existingIds.forEach(elId => {
+    const id = parseInt(elId.replace('toast-', ''));
+    if(!toastQueue.find(t => t.id === id)){
+      const el = document.getElementById(elId);
+      if(el && !el.classList.contains('removing')) el.remove();
+    }
+  });
+  
+  // Add new toasts
+  toastQueue.forEach(toast => {
+    if(document.getElementById(`toast-${toast.id}`)) return;
+    
+    const div = document.createElement('div');
+    div.id = `toast-${toast.id}`;
+    div.className = `toast ${toast.type}`;
+    
+    const icon = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' }[toast.type] || 'ℹ';
+    
+    div.innerHTML = `
+      <div class="toast-icon">${icon}</div>
+      <div class="toast-content">
+        ${toast.title ? `<div class="toast-title">${toast.title}</div>` : ''}
+        <div class="toast-msg">${toast.message}</div>
+      </div>
+      <div class="toast-close">×</div>
+    `;
+    
+    div.querySelector('.toast-close').onclick = () => dismissToast(toast.id);
+    container.appendChild(div);
+  });
+}
+
+// Button loading state helper
+export function setButtonLoading(btn, loading){
+  if(loading){
+    btn.classList.add('btn-loading');
+    btn.disabled = true;
+    if(!btn.querySelector('.spinner')){
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner';
+      btn.appendChild(spinner);
+    }
+  } else {
+    btn.classList.remove('btn-loading');
+    btn.disabled = false;
+    const spinner = btn.querySelector('.spinner');
+    if(spinner) spinner.remove();
+  }
+}
