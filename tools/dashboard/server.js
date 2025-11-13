@@ -964,6 +964,130 @@ const server = app.listen(PORT, () => {
   console.log(`[dashboard] listening on http://localhost:${PORT}`);
 });
 
+// Notifications system
+const notificationsFile = path.join(runtimeDir, 'notifications.json');
+const notificationsClients = new Set();
+
+function ensureNotificationsFile() {
+  if (!fs.existsSync(notificationsFile)) {
+    fs.writeFileSync(notificationsFile, JSON.stringify({ notifications: [] }), 'utf-8');
+  }
+}
+
+function loadNotifications() {
+  try {
+    ensureNotificationsFile();
+    return JSON.parse(fs.readFileSync(notificationsFile, 'utf-8')).notifications || [];
+  } catch { return []; }
+}
+
+function saveNotifications(notifications) {
+  try {
+    fs.writeFileSync(notificationsFile, JSON.stringify({ notifications }, null, 2), 'utf-8');
+    broadcastNotifications();
+  } catch {}
+}
+
+function broadcastNotifications() {
+  const notifications = loadNotifications().slice(-20); // Last 20
+  const data = `data: ${JSON.stringify({ type: 'notifications', notifications })}\n\n`;
+  for (const res of notificationsClients) {
+    try { res.write(data); } catch { notificationsClients.delete(res); }
+  }
+}
+
+function addNotification(type, title, message, data = {}) {
+  const notifications = loadNotifications();
+  const notification = {
+    id: Math.random().toString(36).slice(2),
+    type,
+    title,
+    message,
+    data,
+    timestamp: Date.now(),
+    read: false,
+    actions: type === 'approval' ? [{ id: 'approve', label: 'Approve' }, { id: 'dismiss', label: 'Dismiss' }] : [{ id: 'dismiss', label: 'Dismiss' }]
+  };
+  notifications.push(notification);
+  saveNotifications(notifications.slice(-100)); // Keep last 100
+}
+
+// Notifications API endpoints
+app.get('/api/notifications/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+  
+  notificationsClients.add(res);
+  
+  // Send initial data
+  const notifications = loadNotifications().slice(-20);
+  res.write(`data: ${JSON.stringify({ type: 'notifications', notifications })}\n\n`);
+  
+  req.on('close', () => notificationsClients.delete(res));
+});
+
+app.get('/api/notifications', (_req, res) => {
+  try {
+    const notifications = loadNotifications().slice(-50);
+    res.json({ notifications });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post('/api/notifications/mark-read', (req, res) => {
+  try {
+    const { id, all } = req.body || {};
+    const notifications = loadNotifications();
+    
+    if (all) {
+      notifications.forEach(n => n.read = true);
+    } else if (id) {
+      const notification = notifications.find(n => n.id === id);
+      if (notification) notification.read = true;
+    }
+    
+    saveNotifications(notifications);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post('/api/notifications/action', (req, res) => {
+  try {
+    const { id, action } = req.body || {};
+    const notifications = loadNotifications();
+    const notification = notifications.find(n => n.id === id);
+    
+    if (!notification) return res.status(404).json({ error: 'Notification not found' });
+    
+    if (action === 'approve' && notification.type === 'approval') {
+      // Handle approval logic here
+      fs.appendFileSync(eventsFile, JSON.stringify({ ts: Date.now()/1000, kind: 'approval_granted', data: notification.data }) + '\n', 'utf-8');
+      addNotification('success', 'Approval Granted', `Approved: ${notification.title}`);
+    }
+    
+    if (action === 'dismiss' || action === 'approve') {
+      const index = notifications.findIndex(n => n.id === id);
+      if (index > -1) notifications.splice(index, 1);
+    }
+    
+    saveNotifications(notifications);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Generate sample notifications for demo
+app.post('/api/notifications/demo', (req, res) => {
+  try {
+    addNotification('approval', 'Agent Request', 'Agent wants to execute: rm -rf /tmp/old_files', { command: 'rm -rf /tmp/old_files' });
+    addNotification('info', 'Skill Updated', 'Terminal skill updated to v2.1.0');
+    addNotification('warning', 'High CPU Usage', 'System CPU usage at 85%');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 // WebSocket server for terminal streaming
 const wss = new WebSocketServer({ noServer: true });
 const terminalSessions = new Map();
