@@ -18,17 +18,18 @@ def fail(msg: str) -> None:
 
 
 def check_docstrings():
-    for subdir, _, files in os.walk(os.path.join(AGENTS_DIR, 'stubs')):
-        for f in files:
-            if not f.endswith('.py'):
-                continue
-            path = os.path.join(subdir, f)
-            text = open(path, 'r', encoding='utf-8').read()
-            # Require a class-level docstring or module docstring
-            if 'class ' in text:
-                m = re.search(r'class\s+\w+\s*:\n\s+"""', text)
-                if not m and not text.strip().startswith('"""'):
-                    fail(f"missing docstring: {path}")
+for agent_root in ('stubs', 'concrete'):
+        for subdir, _, files in os.walk(os.path.join(AGENTS_DIR, agent_root)):
+            for f in files:
+                if not f.endswith('.py'):
+                    continue
+                path = os.path.join(subdir, f)
+                text = open(path, 'r', encoding='utf-8').read()
+                # Require a class-level docstring or module docstring
+                if 'class ' in text:
+                    m = re.search(r'class\s+\w+\s*:\n\s+"""', text)
+                    if not m and not text.strip().startswith('"""'):
+                        fail(f"missing docstring: {path}")
 
 
 def check_samples_exist():

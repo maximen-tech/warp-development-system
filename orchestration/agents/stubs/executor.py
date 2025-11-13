@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Any
 
+"""Stub executor; see orchestration/agents/concrete for routed implementation."""
+
 @dataclass
 class ExecutorAgent:
     """Executor agent mapping plans to concrete shell/PowerShell commands.

@@ -4,6 +4,8 @@ import os
 import json
 import shutil
 import subprocess
+from ..agents.concrete.validator import Validator
+from ..logging import log_event
 
 
 def _cmd_exists(cmd: str) -> bool:
@@ -23,6 +25,15 @@ def validate_step(state: Dict[str, Any]) -> Dict[str, Any]:
     actions = state.get("actions", {})
     history.append({"phase": "validation", "checks": checks, "actions": actions})
     summary = {"available": checks, "note": "Commands may be unavailable locally; CI will still run them.", "history_len": len(history)}
+
+    # Summarize with concrete validator agent
+    try:
+        agent = Validator()
+        res = agent.run(summary)
+        summary["bullets"] = res.get("bullets", [])
+        log_event("validation_summary", {"len": len(summary.get("bullets", []))}, phase="validate")
+    except Exception:
+        pass
 
     # Write plan.md if a plan exists (Pattern 1 output artifact)
     try:

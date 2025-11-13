@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 import os
 from fnmatch import fnmatch
 from ..logging import log_event
+from ..agents.concrete.executor import Executor
 
 
 def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -11,12 +12,22 @@ def execute_step(state: Dict[str, Any]) -> Dict[str, Any]:
     manual_globs = cfg.get("manual_required_globs", [])
     auto_globs = cfg.get("auto_apply_globs", [])
 
-    # Pattern 4: planning/execution separation → only propose actions here
-    actions: List[Dict[str, Any]] = [
-        {"name": "build(frontend)", "cmd": ["bash", "05_WORKFLOWS/slash-commands/build/build.sh"], "paths": ["tools/dashboard/**"], "dry_run": True},
-        {"name": "test", "cmd": ["bash", "05_WORKFLOWS/slash-commands/test/test.sh"], "paths": ["tests/**", "**/*.py"], "dry_run": True},
-        {"name": "plan-report", "cmd": ["bash", "05_WORKFLOWS/slash-commands/plan/plan.sh", "Project status"], "paths": ["runtime/plan.md"], "dry_run": True},
-    ]
+    # Pattern 4: planning/execution separation
+    actions: List[Dict[str, Any]] = []
+    try:
+        agent = Executor()
+        res = agent.run(state.get("plan", []))
+        model_actions = res.get("actions", {})
+        # Normalize into our internal format
+        for cmd in (model_actions.get("posix") or []):
+            actions.append({"name": "model", "cmd": cmd, "paths": [], "dry_run": True})
+    except Exception:
+        # fallback deterministic proposals
+        actions = [
+            {"name": "build(frontend)", "cmd": ["bash", "05_WORKFLOWS/slash-commands/build/build.sh"], "paths": ["tools/dashboard/**"], "dry_run": True},
+            {"name": "test", "cmd": ["bash", "05_WORKFLOWS/slash-commands/test/test.sh"], "paths": ["tests/**", "**/*.py"], "dry_run": True},
+            {"name": "plan-report", "cmd": ["bash", "05_WORKFLOWS/slash-commands/plan/plan.sh", "Project status"], "paths": ["runtime/plan.md"], "dry_run": True},
+        ]
     # Windows alternatives (for display)
     actions_ps = [
         {"name": "build(frontend)", "cmd": ["pwsh", "-File", "05_WORKFLOWS/slash-commands/build/build.ps1"], "paths": ["tools/dashboard/**"], "dry_run": True},

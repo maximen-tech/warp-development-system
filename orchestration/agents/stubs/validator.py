@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Any
 
+"""Stub validator; see orchestration/agents/concrete for routed implementation."""
+
 @dataclass
 class ValidatorAgent:
     """Validator agent aggregating tool availability and producing a score."""

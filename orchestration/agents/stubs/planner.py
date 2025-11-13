@@ -2,6 +2,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 
+"""Stub agents for planning; concrete agents live in orchestration/agents/concrete.
+This stub is retained for compatibility and documentation.
+"""
+
 @dataclass
 class PlannerAgent:
     """Planner agent selecting a planning model profile (deepseek-planning).
