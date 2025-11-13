@@ -39,6 +39,15 @@
           <input id="search" class="pill" placeholder="Search by name/role/model/skill" style="min-width:280px"/>
           <select id="roleFilter" class="pill"><option value="">All roles</option><option>planner</option><option>executor</option><option>validator</option><option>custom</option></select>
           <select id="healthFilter" class="pill"><option value="">All health</option><option value="healthy">Healthy</option><option value="stale">Stale</option></select>
+          <select id="sortBy" class="pill">
+            <option value="manual">Sort: Manual</option>
+            <option value="errors">Sort: Errors ↓</option>
+            <option value="calls">Sort: Calls ↓</option>
+            <option value="latency">Sort: Latency ↓</option>
+            <option value="skills">Sort: Skills attached ↓</option>
+            <option value="name">Sort: Name A→Z</option>
+          </select>
+          <label class="pill" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="autoExpandErr"/> Auto-expand on error</label>
           <button id="addBtn" class="pill">Add</button>
           <button id="bulkDelete" class="pill">Delete</button>
           <button id="bulkDuplicate" class="pill">Duplicate</button>
@@ -143,7 +152,7 @@
     </div>
 
     <script>
-      const S = { agents: [], skills: [], status:{}, filter:'', timers:{} };
+      const S = { agents: [], skills: [], status:{}, filter:'', timers:{}, sortBy: (localStorage.getItem('agents.sortBy')||'manual'), autoExpandErr: (localStorage.getItem('agents.autoExpandErr')==='1'), errSeen: {}, lastAutoExpandTs: 0 };
       const qs = (s,el=document)=>el.querySelector(s);
       const qsa = (s,el=document)=>Array.from(el.querySelectorAll(s));
       function showModal(on){ qs('#editorModal').style.display = on?'flex':'none'; }
@@ -160,10 +169,26 @@
 
       function render(){
         const f = (S.filter||'').toLowerCase();
+        const rf = (qs('#roleFilter')?.value||'');
+        const hf = (qs('#healthFilter')?.value||'');
         // agents
         const g = qs('#agentCards'); g.innerHTML='';
-        for(const a of S.agents){
-          if(f){ const hay = [a.name,a.role,a.model,(a.skills||[]).join(' ')].join(' ').toLowerCase(); if(!hay.includes(f)) continue; }
+        let list = S.agents.slice().filter(a=>{
+          if(f){ const hay = [a.name,a.role,a.model,(a.skills||[]).join(' ')].join(' ').toLowerCase(); if(!hay.includes(f)) return false; }
+          if(rf && a.role!==rf) return false;
+          if(hf){ const s = S.status[a.name]||{}; const isHealthy = !!s.healthy; if(hf==='healthy' && !isHealthy) return false; if(hf==='stale' && isHealthy) return false; }
+          return true;
+        });
+        // sort
+        const sb = S.sortBy||'manual';
+        const metric = (a)=>{ const s=S.status[a.name]||{}; return { errors: s.errors||0, calls: s.calls||0, lat: s.avgLatencyMs||0, skills: (a.skills||[]).length }; };
+        if(sb==='name'){ list.sort((a,b)=> (a.name||'').localeCompare(b.name||'')); }
+        else if(sb==='errors'){ list.sort((a,b)=> metric(b).errors - metric(a).errors || (a.name||'').localeCompare(b.name||'')); }
+        else if(sb==='calls'){ list.sort((a,b)=> metric(b).calls - metric(a).calls || (a.name||'').localeCompare(b.name||'')); }
+        else if(sb==='latency'){ list.sort((a,b)=> metric(b).lat - metric(a).lat || (a.name||'').localeCompare(b.name||'')); }
+        else if(sb==='skills'){ list.sort((a,b)=> metric(b).skills - metric(a).skills || (a.name||'').localeCompare(b.name||'')); }
+        // render cards
+        for(const a of list){
           const card = document.createElement('div'); card.className='card'; card.draggable=true; card.dataset.name=a.name||'';
           const st = S.status[a.name]||{}; const healthy = st.healthy? 'ok':'warn';
           card.innerHTML = `
@@ -171,7 +196,7 @@
               <div class="row" style="gap:8px">
                 <div style="width:28px;height:28px;border-radius:50%;background:var(--border)"></div>
                 <div>
-                  <div><b>${a.name||'(unnamed)'}</b> ${a.on===false?'<span class="small" style="color:var(--warn)">(off)</span>':''}</div>
+                  <div><b>${a.name||'(unnamed)'}</b> ${a.on===false?'<span class=\"small\" style=\"color:var(--warn)\">(off)</span>':''}</div>
                   <div class="small">${a.role||'-'} · ${a.model||'-'}</div>
                 </div>
               </div>
@@ -441,6 +466,9 @@
       qs('#search').oninput = (e)=>{ S.filter = e.target.value; render(); };
       qs('#roleFilter').onchange = ()=> render();
       qs('#healthFilter').onchange = ()=> render();
+      // sort + auto-expand prefs
+      const sortEl = qs('#sortBy'); if(sortEl){ sortEl.value = S.sortBy||'manual'; sortEl.onchange = ()=>{ S.sortBy = sortEl.value; localStorage.setItem('agents.sortBy', S.sortBy); render(); }; }
+      const autoEl = qs('#autoExpandErr'); if(autoEl){ autoEl.checked = !!S.autoExpandErr; autoEl.onchange = ()=>{ S.autoExpandErr = !!autoEl.checked; localStorage.setItem('agents.autoExpandErr', S.autoExpandErr ? '1':'0'); }; }
       qs('#reloadAgents').onclick = async ()=>{ await fetch('/api/agents/reload',{ method:'POST' }); alert('Reload event sent'); };
       qs('#historyBtn').onclick = async ()=>{ const h = await (await fetch('/api/agents/history')).json(); alert((h.backups||[]).map(b=>`${new Date(b.ts).toLocaleString()} · ${b.name}`).join('\n')||'No backups'); };
       qs('#changelogBtn').onclick = ()=>{ openModal('#changelogModal'); };
@@ -496,7 +524,15 @@
       qs('#saveBtn').onclick = saveEdit;
       qs('#createSample')?.addEventListener('click', async ()=>{ const sampleSkill = { name:'echo', description:'Echo input', inputs:{ text:'string' }, outputs:{ text:'string' } }; const sampleAgent = { name:'agent-1', role:'executor', model:'local', skills:['echo'], approvals:{ required:false, autonomy:1 } }; S.skills.push(sampleSkill); S.agents.push(sampleAgent); await validateAndMaybeSave(false); });
 
-      async function refreshAnalytics(){ try{ const st = await (await fetch('/api/agents/status?window=3600')).json(); S.status = st.status||{}; Array.from(document.querySelectorAll('#agentCards .card')).forEach(card=>{ const name = card.dataset.name; const s = S.status[name]||{}; const root = card.querySelector('[data-analytics]'); if(!root) return; root.querySelector('[data-calls]').textContent = s.calls||0; root.querySelector('[data-errors]').textContent = s.errors||0; root.querySelector('[data-last]').textContent = s.lastTs? new Date(s.lastTs*1000).toLocaleTimeString() : '-'; root.querySelector('[data-lat]').textContent = s.avgLatencyMs? `${Math.round(s.avgLatencyMs)}ms` : '0ms'; }); }catch{} }
+      async function refreshAnalytics(){ try{ const st = await (await fetch('/api/agents/status?window=3600')).json(); S.status = st.status||{}; Array.from(document.querySelectorAll('#agentCards .card')).forEach(card=>{ const name = card.dataset.name; const s = S.status[name]||{}; const root = card.querySelector('[data-analytics]'); if(!root) return; root.querySelector('[data-calls]').textContent = s.calls||0; root.querySelector('[data-errors]').textContent = s.errors||0; root.querySelector('[data-last]').textContent = s.lastTs? new Date(s.lastTs*1000).toLocaleTimeString() : '-'; root.querySelector('[data-lat]').textContent = s.avgLatencyMs? `${Math.round(s.avgLatencyMs)}ms` : '0ms'; });
+          // auto-expand on new errors (rate-limited)
+          if(S.autoExpandErr){ const now = Date.now(); let opened=false; for(const [name,s] of Object.entries(S.status)){
+            const prev = S.errSeen[name]||0; const cur = s.errors||0; if(!opened && cur>prev && cur>0 && (now - (S.lastAutoExpandTs||0) > 15000)){
+              const agent = S.agents.find(x=>x.name===name); if(agent){ expandAgent(null, agent); S.lastAutoExpandTs = now; opened=true; }
+            }
+            S.errSeen[name] = cur;
+          } }
+        }catch{} }
       S.timers.analytics = setInterval(refreshAnalytics, 5000);
       function updateOnboarding(){ const empty = (!S.agents.length && !S.skills.length); const o = qs('#onboarding'); if(o) o.style.display = empty? '':'none'; }
       const _loadAll = loadAll; loadAll = async function(){ await _loadAll(); updateOnboarding(); refreshAnalytics(); };

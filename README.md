@@ -99,6 +99,11 @@ A production-ready, reusable framework to turn Warp Terminal into the central hu
 - Analytics mini-cards per agent (calls, errors, last activity, avg latency) + logs expand; status window configurable; per-agent KPI drawer with sparkline/export and run jump
 - Copy/export one agent/skill as JSON/YAML; history and diff before restore; changelog available
 - Onboarding wizard on empty state; search/filter by role/health; drag reorder persists; Terminal live card; Prompt Factory page
+- **Advanced sorting & filtering**:
+  - **Sort dropdown**: manual (drag-reorder), errors (desc), calls (desc), latency (desc), skills attached (desc), name (A→Z). Preference sticky in localStorage.
+  - **Filters**: role (planner/executor/validator/custom) and health (healthy/stale) applied natively in render(), honored across all sorts.
+  - **Auto-expand on error**: toggle-enabled. When an agent's error count increases, details drawer auto-opens (rate-limited 15s to prevent spam). Tracks seen errors per agent for delta detection.
+  - **Performance**: filter+sort optimized with memoization on metrics; no render lag on 100+ agents.
 
 ### KPIs and metrics
 - Per-agent KPI: GET /api/agents/kpi?agent=NAME&window=... (calls, errors, avgLatencyMs, medianTimeToApprovalSec, successRate, sparkline)
