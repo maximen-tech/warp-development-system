@@ -3,12 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Agents Control Panel</title>
+    <title>Agents & Skills - Pro Dashboard</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/agents-pro.css" />
+    <script src="/quickbar.js" defer></script>
+    <script src="/ux-suite.js" defer></script>
     <style>
       .tabs{display:flex;gap:8px;margin:12px 0}
-      .tab{padding:6px 10px;border:1px solid var(--border);border-radius:999px;cursor:pointer}
-      .tab.active{background:var(--info);color:#000;border-color:var(--info)}
+      .tab{padding:8px 16px;border:1px solid var(--border);border-radius:999px;cursor:pointer;font-weight:500;transition:all 0.2s;background:transparent}
+      .tab.active{background:var(--info);color:#000;border-color:var(--info);box-shadow:0 2px 8px rgba(106,183,255,0.3);transform:scale(1.05)}
+      .tab:hover:not(.active){border-color:var(--info);background:rgba(106,183,255,0.1)}
       .chips{display:flex;gap:6px;flex-wrap:wrap}
       .chip{border:1px solid var(--border);padding:2px 6px;border-radius:999px}
       .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
@@ -33,38 +37,64 @@
       <span class="pill" id="marketBtn">Marketplace</span>
     </header>
     <div class="wrap">
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <div class="tabs">
-          <div class="tab active" data-tab="agents">Agents</div>
-          <div class="tab" data-tab="skills">Skills</div>
+      <!-- Modern Tabs -->
+      <div class="tabs" style="display:flex;gap:8px;margin:12px 0">
+        <div class="tab active" data-tab="agents" style="padding:8px 16px;border:1px solid var(--border);border-radius:999px;cursor:pointer;font-weight:500;transition:all 0.2s">🤖 Agents</div>
+        <div class="tab" data-tab="skills" style="padding:8px 16px;border:1px solid var(--border);border-radius:999px;cursor:pointer;font-weight:500;transition:all 0.2s">⚡ Skills</div>
+      </div>
+
+      <!-- Professional Toolbar -->
+      <div class="agents-toolbar">
+        <div class="toolbar-section">
+          <input id="search" class="search-input" placeholder="Search agents, skills, models..." />
         </div>
-        <div class="row" style="gap:8px;flex-wrap:wrap">
-          <input id="search" class="pill" placeholder="Search by name/role/model/skill" style="min-width:280px"/>
-          <select id="roleFilter" class="pill"><option value="">All roles</option><option>planner</option><option>executor</option><option>validator</option><option>custom</option></select>
-          <select id="healthFilter" class="pill"><option value="">All health</option><option value="healthy">Healthy</option><option value="stale">Stale</option></select>
-          <select id="sortBy" class="pill">
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-section">
+          <select id="roleFilter" class="select-custom">
+            <option value="">All roles</option>
+            <option>planner</option>
+            <option>executor</option>
+            <option>validator</option>
+            <option>custom</option>
+          </select>
+          <select id="healthFilter" class="select-custom">
+            <option value="">All health</option>
+            <option value="healthy">✓ Healthy</option>
+            <option value="stale">⚠ Stale</option>
+          </select>
+          <select id="sortBy" class="select-custom">
             <option value="manual">Sort: Manual</option>
             <option value="errors">Sort: Errors ↓</option>
             <option value="calls">Sort: Calls ↓</option>
             <option value="latency">Sort: Latency ↓</option>
-            <option value="skills">Sort: Skills attached ↓</option>
+            <option value="skills">Sort: Skills ↓</option>
             <option value="name">Sort: Name A→Z</option>
           </select>
-          <label class="pill" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="autoExpandErr"/> Auto-expand on error</label>
-          <button id="addBtn" class="pill">Add</button>
-          <button id="bulkDelete" class="pill">Delete</button>
-          <button id="bulkDuplicate" class="pill">Duplicate</button>
-          <button id="bulkExportJson" class="pill">Export JSON</button>
-          <label class="pill" for="bulkImport">Import JSON</label><input id="bulkImport" type="file" accept="application/json" style="display:none" />
-          <button id="historyUI" class="pill">Diff & Rollback</button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-section">
+          <label class="toggle-switch">
+            <input type="checkbox" id="autoExpandErr" />
+            <span>Auto-expand errors</span>
+          </label>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-section">
+          <button id="addBtn" class="action-btn primary">+ Add Agent</button>
+          <button id="bulkExportJson" class="action-btn">📥 Export</button>
+          <label class="action-btn" for="bulkImport" style="margin:0">📤 Import</label>
+          <input id="bulkImport" type="file" accept="application/json,.csv" style="display:none" />
+          <button id="bulkDelete" class="action-btn danger">🗑 Delete</button>
+          <button id="bulkDuplicate" class="action-btn">📋 Duplicate</button>
+          <button id="historyUI" class="action-btn">🕐 History</button>
         </div>
       </div>
 
       <div id="agentsView">
-        <div class="grid-cards" id="agentCards"></div>
+        <div class="agents-grid" id="agentCards"></div>
       </div>
       <div id="skillsView" style="display:none">
-        <div class="grid-cards" id="skillCards"></div>
+        <div class="agents-grid" id="skillCards"></div>
       </div>
       <div id="onboarding" class="card" style="display:none;margin-top:12px">
         <div><b>Welcome</b> — Create your first agent and skill</div>
@@ -123,8 +153,54 @@
       </div>
     </div>
 
-    <!-- Connectors Modal -->
-    <div class=\"modal\" id=\"connModal\" style=\"display:none\">\n      <div class=\"content\" style=\"max-width:700px\">\n        <div class=\"row\" style=\"justify-content:space-between;align-items:center\"><strong>Connectors</strong><button class=\"pill\" onclick=\"closeModal('#connModal')\">Close</button></div>\n        <div class=\"kv\"><label class=\"small\">GitHub repo</label><div><input id=\"connGithubRepo\" class=\"pill\" placeholder=\"owner/repo\"/></div></div>\n        <div class=\"kv\"><label class=\"small\">GitHub token</label><div><input id=\"connGithubToken\" class=\"pill\" placeholder=\"{{GITHUB_TOKEN}}\"/></div></div>\n        <div class=\"kv\"><label class=\"small\">Slack webhook</label><div><input id=\"connSlack\" class=\"pill\" placeholder=\"https://hooks.slack.com/...\"/></div></div>\n        <div class=\"row\" style=\"gap:8px;justify-content:flex-end\"><button class=\"pill\" id=\"connTest\">Test</button><button class=\"pill\" id=\"connSave\">Save</button></div>\n        <div id=\"connStatus\" class=\"small\"></div>\n      </div>\n    </div>
+    <!-- Connectors Modal (Pro-grade tile-based) -->
+    <div class="modal-overlay" id="connModal">
+      <div class="modal-container" style="max-width:800px">
+        <div class="modal-header">
+          <div class="modal-title">🔌 Connectors</div>
+          <button class="modal-close" onclick="closeModal('#connModal')">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="connectors-grid">
+            <!-- GitHub Connector Tile -->
+            <div class="connector-tile" id="githubTile">
+              <div class="connector-header">
+                <div class="connector-icon github">
+                  <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                  </svg>
+                </div>
+                <div class="connector-title">GitHub</div>
+                <div class="connector-status inactive" id="githubStatus">Not configured</div>
+              </div>
+              <input id="connGithubRepo" class="connector-input" placeholder="owner/repo" />
+              <input id="connGithubToken" class="connector-input" type="password" placeholder="{{GITHUB_TOKEN}}" />
+              <div class="connector-feedback" id="githubFeedback"></div>
+            </div>
+
+            <!-- Slack Connector Tile -->
+            <div class="connector-tile" id="slackTile">
+              <div class="connector-header">
+                <div class="connector-icon slack">
+                  <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M3.362 10.11c0 .926-.756 1.681-1.681 1.681S0 11.036 0 10.111C0 9.186.756 8.43 1.68 8.43h1.682v1.68zm.846 0c0-.924.756-1.68 1.681-1.68s1.681.756 1.681 1.68v4.21c0 .924-.756 1.68-1.68 1.68a1.685 1.685 0 0 1-1.682-1.68v-4.21zM5.89 3.362c-.926 0-1.682-.756-1.682-1.681S4.964 0 5.89 0s1.68.756 1.68 1.68v1.682H5.89zm0 .846c.924 0 1.68.756 1.68 1.681S6.814 7.57 5.89 7.57H1.68C.757 7.57 0 6.814 0 5.89c0-.926.756-1.682 1.68-1.682h4.21zm6.749 1.682c0-.926.755-1.682 1.68-1.682.925 0 1.681.756 1.681 1.681s-.756 1.681-1.68 1.681h-1.681V5.89zm-.848 0c0 .924-.755 1.68-1.68 1.68A1.685 1.685 0 0 1 8.43 5.89V1.68C8.43.757 9.186 0 10.11 0c.926 0 1.681.756 1.681 1.68v4.21zm-1.681 6.748c.926 0 1.682.756 1.682 1.681S11.036 16 10.11 16s-1.681-.756-1.681-1.68v-1.682h1.68zm0-.847c-.924 0-1.68-.755-1.68-1.68 0-.925.756-1.681 1.68-1.681h4.21c.924 0 1.68.756 1.68 1.68 0 .926-.756 1.681-1.68 1.681h-4.21z"/>
+                  </svg>
+                </div>
+                <div class="connector-title">Slack</div>
+                <div class="connector-status inactive" id="slackStatus">Not configured</div>
+              </div>
+              <input id="connSlack" class="connector-input" type="url" placeholder="https://hooks.slack.com/services/..." />
+              <div class="connector-feedback" id="slackFeedback"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="action-btn" onclick="closeModal('#connModal')">Cancel</button>
+          <button class="action-btn" id="connTest">🧪 Test Connections</button>
+          <button class="action-btn primary" id="connSave">✓ Save</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Details Drawer Modal -->
     <div class="modal" id="detailsModal" style="display:none">
@@ -160,9 +236,9 @@
       const qsa = (s,el=document)=>Array.from(el.querySelectorAll(s));
       function showModal(on){ qs('#editorModal').style.display = on?'flex':'none'; }
 
-      // Lightweight modal helper for other modals
-      function openModal(id){ const m = qs(id); if(m) m.style.display='flex'; }
-      function closeModal(id){ const m = qs(id); if(m) m.style.display='none'; }
+      // Lightweight modal helper for other modals (supports both old and new styles)
+      function openModal(id){ const m = qs(id); if(m){ if(m.classList.contains('modal-overlay')){ m.classList.add('show'); } else { m.style.display='flex'; } } }
+      function closeModal(id){ const m = qs(id); if(m){ if(m.classList.contains('modal-overlay')){ m.classList.remove('show'); } else { m.style.display='none'; } } }
 
       async function loadAll(){
         const list = await (await fetch('/api/agents/list')).json();
@@ -190,75 +266,117 @@
         else if(sb==='calls'){ list.sort((a,b)=> metric(b).calls - metric(a).calls || (a.name||'').localeCompare(b.name||'')); }
         else if(sb==='latency'){ list.sort((a,b)=> metric(b).lat - metric(a).lat || (a.name||'').localeCompare(b.name||'')); }
         else if(sb==='skills'){ list.sort((a,b)=> metric(b).skills - metric(a).skills || (a.name||'').localeCompare(b.name||'')); }
-        // render cards
+        // render cards (Pro-grade design)
         for(const a of list){
-          const card = document.createElement('div'); card.className='card'; card.draggable=true; card.dataset.name=a.name||'';
-          const st = S.status[a.name]||{}; const healthy = st.healthy? 'ok':'warn';
+          const card = document.createElement('div');
+          card.className = 'agent-card' + (a.on===false ? ' off' : '');
+          card.draggable = true;
+          card.dataset.name = a.name||'';
+          
+          const st = S.status[a.name]||{};
+          const healthClass = st.healthy ? 'healthy' : 'stale';
+          const hasConnectors = a.connectors && (a.connectors.github || a.connectors.slack);
+          const initials = (a.name||'?').substring(0,2).toUpperCase();
+          
           card.innerHTML = `
-            <div class="row" style="justify-content:space-between;align-items:center">
-              <div class="row" style="gap:8px">
-                <div style="width:28px;height:28px;border-radius:50%;background:var(--border)"></div>
-                <div>
-                  <div><b>${a.name||'(unnamed)'}</b> ${a.on===false?'<span class=\"small\" style=\"color:var(--warn)\">(off)</span>':''}</div>
-                  <div class="small">${a.role||'-'} · ${a.model||'-'}</div>
+            <div class="agent-card-header">
+              <div class="agent-avatar">${initials}</div>
+              <div class="agent-info">
+                <div class="agent-name">
+                  <span class="agent-name-text">${a.name||'(unnamed)'}</span>
+                  ${a.on===false ? '<span class="status-badge error">off</span>' : ''}
+                </div>
+                <div class="agent-meta">
+                  <span>${a.role||'-'}</span>
+                  <span class="agent-meta-separator">•</span>
+                  <span>${a.model||'-'}</span>
                 </div>
               </div>
-              <div class="row">
-                <input type="checkbox" data-select />
-                <button class="pill" data-act="expand">Details</button>
-                <button class=\"pill\" data-act=\"edit\">Edit</button>
-                <button class=\"pill\" data-act=\"connectors\">Connectors</button>
-                <button class=\"pill\" data-act=\"test\">Test</button>
-                <button class="pill" data-act="copyjson">Copy JSON</button>
-                <button class="pill" data-act="copyyaml">Copy YAML</button>
-                <button class="pill" data-act="export">Export</button>
-                <button class="pill" data-act="delete">Delete</button>
+              <input type="checkbox" data-select style="margin-left:auto" />
+            </div>
+            
+            <div class="skills-list">
+              ${(a.skills||[]).length > 0 ? (a.skills||[]).map(s=>`<span class="skill-chip">${s}</span>`).join('') : '<span class="skills-empty">No skills attached</span>'}
+            </div>
+            
+            <div class="agent-stats">
+              <div class="stat-item">
+                <span class="stat-value" data-calls>0</span>
+                <span class="stat-label">Calls</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value" data-errors>0</span>
+                <span class="stat-label">Errors</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value" data-lat>0ms</span>
+                <span class="stat-label">Latency</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value" data-last>-</span>
+                <span class="stat-label">Last</span>
               </div>
             </div>
-            <div class="row" style="margin-top:8px;justify-content:space-between">
-              <div class=\"chips\">${(a.skills||[]).map(s=>`<span class=\"chip\">${s}</span>`).join('')||'<span class=\"small\">No skills</span>'}</div>
-              <div>${healthy==='ok'?'<span class=\"badge ok\">healthy</span>':'<span class=\"badge warn\">stale</span>'} ${(a.connectors&& (a.connectors.github||a.connectors.slack))? '<span class=\"badge conn\">conn</span>':''}</div>
+            
+            <div style="display:flex;gap:6px;margin:12px 0;flex-wrap:wrap">
+              <span class="status-badge ${healthClass}">${healthClass}</span>
+              ${hasConnectors ? '<span class="status-badge connected">connected</span>' : ''}
             </div>
-            <div class="row small" data-analytics style="gap:12px;margin-top:6px">
-              <span>calls:<b data-calls>0</b></span>
-              <span>errors:<b data-errors>0</b></span>
-              <span>last:<b data-last>-</b></span>
-              <span>latency:<b data-lat>0ms</b></span>
+            
+            <div class="agent-actions">
+              <button class="action-btn primary" data-act="expand">🔍 Details</button>
+              <button class="action-btn" data-act="edit">✏ Edit</button>
+              <button class="action-btn" data-act="test">🧪 Test</button>
+              <button class="action-btn" data-act="connectors">🔌 Connect</button>
+              <button class="action-btn danger" data-act="delete">🗑 Delete</button>
             </div>
           `;
-          card.querySelector('[data-act=\"expand\"]').onclick = ()=> expandAgent(card, a);
-          card.querySelector('[data-act=\"edit\"]').onclick = ()=> openEditor('agent', a);
-          card.querySelector('[data-act=\"test\"]').onclick = ()=> testAgent(a);
-          card.querySelector('[data-act=\"copyjson\"]').onclick = ()=> navigator.clipboard.writeText(JSON.stringify(a,null,2));
-          card.querySelector('[data-act=\"copyyaml\"]').onclick = async ()=>{ const t = await (await fetch(`/api/agents/export-one?name=${encodeURIComponent(a.name)}&format=yaml`)).text(); await navigator.clipboard.writeText(t); };
-          card.querySelector('[data-act=\"export\"]').onclick = async ()=>{ const t = await (await fetch(`/api/agents/export-one?name=${encodeURIComponent(a.name)}&format=yaml`)).text(); const blob = new Blob([t],{type:'text/plain'}); const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`agent_${a.name}.yml`; link.click(); };
-          card.querySelector('[data-act=\"connectors\"]').onclick = ()=> openConnectors(a);
-          card.querySelector('[data-act=\"delete\"]').onclick = ()=> deleteAgent(a);
+          
+          card.querySelector('[data-act="expand"]').onclick = ()=> expandAgent(card, a);
+          card.querySelector('[data-act="edit"]').onclick = ()=> openEditor('agent', a);
+          card.querySelector('[data-act="test"]').onclick = ()=> testAgent(a);
+          card.querySelector('[data-act="connectors"]').onclick = ()=> openConnectors(a);
+          card.querySelector('[data-act="delete"]').onclick = ()=> deleteAgent(a);
+          
           g.appendChild(card);
         }
-        // skills
+        // skills (Pro design)
         const sg = qs('#skillCards'); sg.innerHTML='';
         for(const s of S.skills){
           if(f){ const hay = [s.name,s.description].join(' ').toLowerCase(); if(!hay.includes(f)) continue; }
           const attachedCount = S.agents.reduce((acc,a)=> acc + ((a.skills||[]).includes(s.name)?1:0), 0);
-          const card = document.createElement('div'); card.className='card'; card.dataset.name=s.name||'';
+          const card = document.createElement('div');
+          card.className = 'agent-card';
+          card.dataset.name = s.name||'';
+          const initials = (s.name||'?').substring(0,2).toUpperCase();
+          
           card.innerHTML = `
-            <div class="row" style="justify-content:space-between;align-items:center">
-              <div>
-                <div><b>${s.name||'(unnamed)'}</b> <span class="small">(${attachedCount} attached)</span></div>
-                <div class="small">${(s.description||'').slice(0,120)}</div>
-              </div>
-              <div class="row">
-                <button class="pill" data-act="copyjson">Copy JSON</button>
-                <button class="pill" data-act="copyyaml">Copy YAML</button>
-                <button class="pill" data-act="export">Export</button>
-                <button class="pill" data-act="edit">Edit</button>
-                <button class="pill" data-act="delete">Delete</button>
+            <div class="agent-card-header">
+              <div class="agent-avatar" style="background:linear-gradient(135deg, var(--warn) 0%, var(--info) 100%)">${initials}</div>
+              <div class="agent-info">
+                <div class="agent-name">
+                  <span class="agent-name-text">${s.name||'(unnamed)'}</span>
+                </div>
+                <div class="agent-meta">
+                  <span>${attachedCount} agent${attachedCount!==1?'s':''} attached</span>
+                </div>
               </div>
             </div>
+            
+            <div style="margin:12px 0;color:#9fb3c8;font-size:14px;line-height:1.5">
+              ${(s.description||'No description').slice(0,160)}${(s.description||'').length>160?'...':''}
+            </div>
+            
+            <div class="agent-actions">
+              <button class="action-btn primary" data-act="edit">✏ Edit</button>
+              <button class="action-btn" data-act="copyjson">📋 Copy JSON</button>
+              <button class="action-btn" data-act="export">📥 Export</button>
+              <button class="action-btn danger" data-act="delete">🗑 Delete</button>
+            </div>
           `;
+          
           card.querySelector('[data-act="copyjson"]').onclick = ()=> navigator.clipboard.writeText(JSON.stringify(s,null,2));
-          card.querySelector('[data-act="copyyaml"]').onclick = async ()=>{ const t = await (await fetch(`/api/skills/export-one?name=${encodeURIComponent(s.name)}&format=yaml`)).text(); await navigator.clipboard.writeText(t); };
+          card.querySelector('[data-act="copyyaml"]')?.onclick = async ()=>{ const t = await (await fetch(`/api/skills/export-one?name=${encodeURIComponent(s.name)}&format=yaml`)).text(); await navigator.clipboard.writeText(t); };
           card.querySelector('[data-act="export"]').onclick = async ()=>{ const t = await (await fetch(`/api/skills/export-one?name=${encodeURIComponent(s.name)}&format=yaml`)).text(); const blob = new Blob([t],{type:'text/plain'}); const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`skill_${s.name}.yml`; link.click(); };
           card.querySelector('[data-act="edit"]').onclick = ()=> openEditor('skill', s);
           card.querySelector('[data-act="delete"]').onclick = ()=> { if(attachedCount>0 && !confirm('Skill is attached to '+attachedCount+' agent(s). Detach and delete?')) return; deleteSkill(s); };
@@ -269,14 +387,14 @@
 
       function enableDrag(){
         const container = qs('#agentCards');
-        qsa('.card', container).forEach(c=>{
+        qsa('.agent-card', container).forEach(c=>{
           c.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', c.dataset.name); });
         });
         container.addEventListener('dragover', e=>{ e.preventDefault(); });
         container.addEventListener('drop', e=>{
-          e.preventDefault(); const name = e.dataTransfer.getData('text/plain'); const el = qsa('.card', container).find(x=>x.dataset.name===name); const target = e.target.closest('.card'); if(!el || !target || el===target) return; container.insertBefore(el, target);
+          e.preventDefault(); const name = e.dataTransfer.getData('text/plain'); const el = qsa('.agent-card', container).find(x=>x.dataset.name===name); const target = e.target.closest('.agent-card'); if(!el || !target || el===target) return; container.insertBefore(el, target);
           // persist order to S and save
-          const order = qsa('.card', container).map(x=>x.dataset.name);
+          const order = qsa('.agent-card', container).map(x=>x.dataset.name);
           S.agents.sort((a,b)=> order.indexOf(a.name)-order.indexOf(b.name));
           validateAndMaybeSave(true);
         });
@@ -390,9 +508,71 @@
         });
       }
       function openConnectors(agent){
-        openModal('#connModal'); const ghRepo=qs('#connGithubRepo'), ghTok=qs('#connGithubToken'), slack=qs('#connSlack'), status=qs('#connStatus'); const cfg = (agent.connectors||{}); ghRepo.value = cfg.github?.repo||''; ghTok.value = cfg.github?.token||''; slack.value = cfg.slack?.webhook||'';
-        qs('#connTest').onclick = async ()=>{ status.textContent='Testing...'; try{ const j = await (await fetch('/api/connectors/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type:'multi', config:{ github:{ repo: ghRepo.value, token: ghTok.value }, slack:{ webhook: slack.value } } })})).json(); status.textContent = j.ok? 'OK' : 'Failed'; }catch{ status.textContent='Failed'; } };
-        qs('#connSave').onclick = async ()=>{ agent.connectors = { github:{ repo: ghRepo.value, token: ghTok.value }, slack:{ webhook: slack.value } }; await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent }) }); closeModal('#connModal'); await loadAll(); };
+        // Open modal with new class
+        const modal = qs('#connModal');
+        modal.classList.add('show');
+        
+        const ghRepo=qs('#connGithubRepo'), ghTok=qs('#connGithubToken'), slack=qs('#connSlack');
+        const ghFeedback=qs('#githubFeedback'), slackFeedback=qs('#slackFeedback');
+        const ghStatus=qs('#githubStatus'), slackStatus=qs('#slackStatus');
+        const ghTile=qs('#githubTile'), slackTile=qs('#slackTile');
+        
+        const cfg = (agent.connectors||{});
+        ghRepo.value = cfg.github?.repo||'';
+        ghTok.value = cfg.github?.token||'';
+        slack.value = cfg.slack?.webhook||'';
+        
+        // Update status badges
+        if(cfg.github?.repo && cfg.github?.token){
+          ghStatus.textContent = 'Configured';
+          ghStatus.classList.remove('inactive');
+          ghStatus.classList.add('active');
+          ghTile.classList.add('active');
+        }
+        if(cfg.slack?.webhook){
+          slackStatus.textContent = 'Configured';
+          slackStatus.classList.remove('inactive');
+          slackStatus.classList.add('active');
+          slackTile.classList.add('active');
+        }
+        
+        qs('#connTest').onclick = async ()=>{
+          ghFeedback.textContent = 'Testing...';
+          ghFeedback.classList.remove('success', 'error');
+          ghFeedback.classList.add('show');
+          slackFeedback.textContent = 'Testing...';
+          slackFeedback.classList.remove('success', 'error');
+          slackFeedback.classList.add('show');
+          
+          try{
+            const j = await (await fetch('/api/connectors/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type:'multi', config:{ github:{ repo: ghRepo.value, token: ghTok.value }, slack:{ webhook: slack.value } } })})).json();
+            
+            if(j.ok){
+              ghFeedback.textContent = '✓ GitHub connection successful';
+              ghFeedback.classList.add('success');
+              slackFeedback.textContent = '✓ Slack connection successful';
+              slackFeedback.classList.add('success');
+            } else {
+              ghFeedback.textContent = '✗ Test failed: ' + (j.error||'Unknown error');
+              ghFeedback.classList.add('error');
+              slackFeedback.textContent = '✗ Test failed';
+              slackFeedback.classList.add('error');
+            }
+          }catch(err){
+            ghFeedback.textContent = '✗ Connection failed';
+            ghFeedback.classList.add('error');
+            slackFeedback.textContent = '✗ Connection failed';
+            slackFeedback.classList.add('error');
+          }
+        };
+        
+        qs('#connSave').onclick = async ()=>{
+          agent.connectors = { github:{ repo: ghRepo.value, token: ghTok.value }, slack:{ webhook: slack.value } };
+          await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent }) });
+          modal.classList.remove('show');
+          if(window.showToast) showToast('Connectors saved successfully', 'success');
+          await loadAll();
+        };
       }
 
       function updateFromForm(form, obj){
@@ -464,7 +644,7 @@
       }
 
       // events
-      qsa('.tab').forEach(t=>{ t.onclick = ()=>{ qsa('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); const tab=t.dataset.tab; qs('#agentsView').style.display = tab==='agents'?'':'none'; qs('#skillsView').style.display = tab==='skills'?'':'none'; qs('#addBtn').textContent = tab==='agents'? 'Add agent':'Add skill'; }; });
+      qsa('.tab').forEach(t=>{ t.onclick = ()=>{ qsa('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); const tab=t.dataset.tab; qs('#agentsView').style.display = tab==='agents'?'':'none'; qs('#skillsView').style.display = tab==='skills'?'':'none'; qs('#addBtn').textContent = tab==='agents'? '+ Add Agent':'+ Add Skill'; }; });
       qs('#addBtn').onclick = ()=> openEditor(qs('.tab.active').dataset.tab==='agents'?'agent':'skill', { name:'', role:'custom', model:'', skills:[], approvals:{ required:false, autonomy:0 } });
       qs('#search').oninput = (e)=>{ S.filter = e.target.value; render(); };
       qs('#roleFilter').onchange = ()=> render();
@@ -481,7 +661,7 @@
       qs('#doRollback').onclick = async ()=>{ const name = qs('#backupSelect').value; if(!name) return; if(!confirm('Rollback to '+name+'?')) return; await fetch('/api/agents/rollback-group',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ names:[name] }) }); closeModal('#diffModal'); await loadAll(); };
       qs('#exportAgents').onclick = async ()=>{ const j = await (await fetch('/api/agents/export?format=json')).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_export.json'; a.click(); };
       qs('#bulkExportJson').onclick = async ()=>{
-        const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean);
+        const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.agent-card')?.dataset?.name).filter(Boolean);
         const url = '/api/agents/export?format=json'+(selected.length? `&names=${encodeURIComponent(selected.join(','))}`:'');
         const j = await (await fetch(url)).json(); const blob = new Blob([JSON.stringify(j,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='agents_selected.json'; a.click();
       };
@@ -521,13 +701,13 @@
           const dry = await (await fetch('/api/agents/validate-json',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: S.agents, skills: [...S.skills, ...sel] })})).json(); if(!dry.ok){ status.textContent='Validation errors: '+(dry.errors||[]).map(e=>e.file).join(', '); return; }
           const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ skills: sel, partial:true, dryRun:false }) })).json(); if(!res.ok){ status.textContent = 'Import failed'; return; } closeModal('#marketModal'); await loadAll(); };
         }catch{ status.textContent='Fetch failed'; } };
-      qs('#bulkDelete').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); if(!confirm('Delete '+selected.length+' agents?')) return; for(const name of selected){ await fetch(`/api/agents/item?name=${encodeURIComponent(name)}`,{ method:'DELETE' }); } await loadAll(); };
-      qs('#bulkDuplicate').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); const list = S.agents.filter(a=>selected.includes(a.name)); for(const a of list){ const copy = JSON.parse(JSON.stringify(a)); copy.name = a.name+'-copy'; await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent: copy }) }); } await loadAll(); };
+      qs('#bulkDelete').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.agent-card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); if(!confirm('Delete '+selected.length+' agents?')) return; for(const name of selected){ await fetch(`/api/agents/item?name=${encodeURIComponent(name)}`,{ method:'DELETE' }); } await loadAll(); };
+      qs('#bulkDuplicate').onclick = async ()=>{ const selected = Array.from(document.querySelectorAll('[data-select]:checked')).map(cb=>cb.closest('.agent-card')?.dataset?.name).filter(Boolean); if(!selected.length) return alert('No selection'); const list = S.agents.filter(a=>selected.includes(a.name)); for(const a of list){ const copy = JSON.parse(JSON.stringify(a)); copy.name = a.name+'-copy'; await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent: copy }) }); } await loadAll(); };
       qs('#closeModal').onclick = ()=> showModal(false);
       qs('#saveBtn').onclick = saveEdit;
       qs('#createSample')?.addEventListener('click', async ()=>{ const sampleSkill = { name:'echo', description:'Echo input', inputs:{ text:'string' }, outputs:{ text:'string' } }; const sampleAgent = { name:'agent-1', role:'executor', model:'local', skills:['echo'], approvals:{ required:false, autonomy:1 } }; S.skills.push(sampleSkill); S.agents.push(sampleAgent); await validateAndMaybeSave(false); });
 
-      async function refreshAnalytics(){ try{ const st = await (await fetch('/api/agents/status?window=3600')).json(); S.status = st.status||{}; Array.from(document.querySelectorAll('#agentCards .card')).forEach(card=>{ const name = card.dataset.name; const s = S.status[name]||{}; const root = card.querySelector('[data-analytics]'); if(!root) return; root.querySelector('[data-calls]').textContent = s.calls||0; root.querySelector('[data-errors]').textContent = s.errors||0; root.querySelector('[data-last]').textContent = s.lastTs? new Date(s.lastTs*1000).toLocaleTimeString() : '-'; root.querySelector('[data-lat]').textContent = s.avgLatencyMs? `${Math.round(s.avgLatencyMs)}ms` : '0ms'; });
+      async function refreshAnalytics(){ try{ const st = await (await fetch('/api/agents/status?window=3600')).json(); S.status = st.status||{}; Array.from(document.querySelectorAll('#agentCards .agent-card')).forEach(card=>{ const name = card.dataset.name; const s = S.status[name]||{}; const callsEl = card.querySelector('[data-calls]'); const errorsEl = card.querySelector('[data-errors]'); const lastEl = card.querySelector('[data-last]'); const latEl = card.querySelector('[data-lat]'); if(callsEl) callsEl.textContent = s.calls||0; if(errorsEl) errorsEl.textContent = s.errors||0; if(lastEl) lastEl.textContent = s.lastTs? new Date(s.lastTs*1000).toLocaleTimeString() : '-'; if(latEl) latEl.textContent = s.avgLatencyMs? `${Math.round(s.avgLatencyMs)}ms` : '0ms'; });
           // auto-expand on new errors (rate-limited)
           if(S.autoExpandErr){ const now = Date.now(); let opened=false; for(const [name,s] of Object.entries(S.status)){
             const prev = S.errSeen[name]||0; const cur = s.errors||0; if(!opened && cur>prev && cur>0 && (now - (S.lastAutoExpandTs||0) > 15000)){
@@ -541,7 +721,7 @@
       const _loadAll = loadAll; loadAll = async function(){ await _loadAll(); updateOnboarding(); refreshAnalytics(); };
 
       loadAll();
-      const _render = render; render = function(){ const prev = S.filter; S.filter = document.getElementById('search').value; const role = document.getElementById('roleFilter')?.value||''; const health = document.getElementById('healthFilter')?.value||''; const orig = S.agents.slice(); _render(); Array.from(document.querySelectorAll('#agentCards .card')).forEach(card=>{ const name = card.dataset.name; const a = orig.find(x=>x.name===name); let show = true; if(role && a?.role!==role) show=false; const st = S.status[name]||{}; if(health==='healthy' && !st.healthy) show=false; if(health==='stale' && st.healthy) show=false; card.style.display = show? '':'none'; }); S.filter = prev; };
+      const _render = render; render = function(){ const prev = S.filter; S.filter = document.getElementById('search').value; const role = document.getElementById('roleFilter')?.value||''; const health = document.getElementById('healthFilter')?.value||''; const orig = S.agents.slice(); _render(); Array.from(document.querySelectorAll('#agentCards .agent-card')).forEach(card=>{ const name = card.dataset.name; const a = orig.find(x=>x.name===name); let show = true; if(role && a?.role!==role) show=false; const st = S.status[name]||{}; if(health==='healthy' && !st.healthy) show=false; if(health==='stale' && st.healthy) show=false; card.style.display = show? '':'none'; }); S.filter = prev; };
 
       // Hotkeys: undo/redo
       document.addEventListener('keydown', async (e)=>{
