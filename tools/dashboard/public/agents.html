@@ -88,7 +88,7 @@
         <div id="dropzone" class="card" style="padding:12px;border-style:dashed">Drag & drop JSON/CSV here or use toolbar Import JSON</div>
         <div class="small" id="importStatus"></div>
         <div id="importTable" class="small" style="max-height:40vh;overflow:auto"></div>
-        <div class="row" style="justify-content:flex-end"><button class="pill" id="applyImport" disabled>Apply selected</button></div>
+        <div class="row" style="gap:8px;align-items:center;justify-content:flex-end"><progress id="importProgress" max="100" value="0" style="width:180px"></progress><button class="pill" id="applyImport" disabled>Apply selected</button></div>
       </div>
     </div>
 
@@ -111,13 +111,17 @@
       </div>
     </div>
 
+    <!-- Connectors Modal -->
+    <div class=\"modal\" id=\"connModal\" style=\"display:none\">\n      <div class=\"content\" style=\"max-width:700px\">\n        <div class=\"row\" style=\"justify-content:space-between;align-items:center\"><strong>Connectors</strong><button class=\"pill\" onclick=\"closeModal('#connModal')\">Close</button></div>\n        <div class=\"kv\"><label class=\"small\">GitHub repo</label><div><input id=\"connGithubRepo\" class=\"pill\" placeholder=\"owner/repo\"/></div></div>\n        <div class=\"kv\"><label class=\"small\">GitHub token</label><div><input id=\"connGithubToken\" class=\"pill\" placeholder=\"{{GITHUB_TOKEN}}\"/></div></div>\n        <div class=\"kv\"><label class=\"small\">Slack webhook</label><div><input id=\"connSlack\" class=\"pill\" placeholder=\"https://hooks.slack.com/...\"/></div></div>\n        <div class=\"row\" style=\"gap:8px;justify-content:flex-end\"><button class=\"pill\" id=\"connTest\">Test</button><button class=\"pill\" id=\"connSave\">Save</button></div>\n        <div id=\"connStatus\" class=\"small\"></div>\n      </div>\n    </div>
+
     <!-- Details Drawer Modal -->
     <div class="modal" id="detailsModal" style="display:none">
       <div class="content" style="max-width:900px">
         <div class="row" style="justify-content:space-between;align-items:center"><strong id="detailsTitle">Agent details</strong><button class="pill" onclick="closeModal('#detailsModal')">Close</button></div>
         <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px">
-          <div class="card"><div class="small">Status</div><pre id="detStatus" class="small"></pre></div>
+          <div class="card"><div class="row" style="justify-content:space-between"><div class="small">Status</div><button class="pill" id="detJumpRuns">Open runs</button></div><pre id="detStatus" class="small"></pre></div>
           <div class="card"><div class="small">Logs</div><pre id="detLogs" class="small" style="max-height:200px;overflow:auto"></pre></div>
+          <div class="card"><div class="small">KPI (last 60m)</div><div class="row" style="gap:8px"><canvas id="detKpiSpark" width="260" height="60"></canvas><div class="small" id="detKpiStats"></div></div><div class="row" style="gap:8px"><button class="pill" id="detExportKpi">Export JSON</button></div></div>
           <div class="card" style="grid-column:1/3"><div class="small">Timeline (recent)</div><pre id="detTimeline" class="small" style="max-height:200px;overflow:auto"></pre></div>
         </div>
       </div>
@@ -174,8 +178,9 @@
               <div class="row">
                 <input type="checkbox" data-select />
                 <button class="pill" data-act="expand">Details</button>
-                <button class="pill" data-act="edit">Edit</button>
-                <button class="pill" data-act="test">Test</button>
+                <button class=\"pill\" data-act=\"edit\">Edit</button>
+                <button class=\"pill\" data-act=\"connectors\">Connectors</button>
+                <button class=\"pill\" data-act=\"test\">Test</button>
                 <button class="pill" data-act="copyjson">Copy JSON</button>
                 <button class="pill" data-act="copyyaml">Copy YAML</button>
                 <button class="pill" data-act="export">Export</button>
@@ -183,8 +188,8 @@
               </div>
             </div>
             <div class="row" style="margin-top:8px;justify-content:space-between">
-              <div class="chips">${(a.skills||[]).map(s=>`<span class="chip">${s}</span>`).join('')||'<span class="small">No skills</span>'}</div>
-              <div>${healthy==='ok'?'<span class="badge ok">healthy</span>':'<span class="badge warn">stale</span>'}</div>
+              <div class=\"chips\">${(a.skills||[]).map(s=>`<span class=\"chip\">${s}</span>`).join('')||'<span class=\"small\">No skills</span>'}</div>
+              <div>${healthy==='ok'?'<span class=\"badge ok\">healthy</span>':'<span class=\"badge warn\">stale</span>'} ${(a.connectors&& (a.connectors.github||a.connectors.slack))? '<span class=\"badge conn\">conn</span>':''}</div>
             </div>
             <div class="row small" data-analytics style="gap:12px;margin-top:6px">
               <span>calls:<b data-calls>0</b></span>
@@ -199,6 +204,7 @@
           card.querySelector('[data-act=\"copyjson\"]').onclick = ()=> navigator.clipboard.writeText(JSON.stringify(a,null,2));
           card.querySelector('[data-act=\"copyyaml\"]').onclick = async ()=>{ const t = await (await fetch(`/api/agents/export-one?name=${encodeURIComponent(a.name)}&format=yaml`)).text(); await navigator.clipboard.writeText(t); };
           card.querySelector('[data-act=\"export\"]').onclick = async ()=>{ const t = await (await fetch(`/api/agents/export-one?name=${encodeURIComponent(a.name)}&format=yaml`)).text(); const blob = new Blob([t],{type:'text/plain'}); const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=`agent_${a.name}.yml`; link.click(); };
+          card.querySelector('[data-act=\"connectors\"]').onclick = ()=> openConnectors(a);
           card.querySelector('[data-act=\"delete\"]').onclick = ()=> deleteAgent(a);
           g.appendChild(card);
         }
@@ -292,10 +298,11 @@
           if(p==='Safe'){ obj.approvals.required = true; obj.approvals.autonomy = 0; obj.guardrails = obj.guardrails||{ blockedCommands:['rm -rf','drop database'] }; }
           else if(p==='Balanced'){ obj.approvals.required = true; obj.approvals.autonomy = 1; obj.guardrails = obj.guardrails||{ reviewRequired:['write files','git push'] }; }
           else if(p==='Autonomous'){ obj.approvals.required = false; obj.approvals.autonomy = 3; obj.guardrails = obj.guardrails||{ auditOnly:true }; }
+          S.saveReason = 'policy-change';
           validateLive();
         };
         div.appendChild(sel);
-        const pyr = document.createElement('div'); pyr.className='small'; pyr.innerText = '▲\n▲▲\n▲▲▲'; div.appendChild(pyr);
+        const pyr = document.createElement('div'); pyr.className='small'; pyr.innerText = '▲\n▲▲\n▲▲▲'; pyr.style.cursor='pointer'; pyr.title='Click rows to set autonomy 0-2, bottom = 3'; pyr.onclick = (e)=>{ const y = e.offsetY; const h = e.target.clientHeight||30; const ratio = y/h; const lvl = ratio<0.33? 0 : (ratio<0.66? 1 : 2); const obj=S.editObj; obj.approvals=obj.approvals||{}; obj.approvals.autonomy = lvl; S.saveReason='policy-change'; validateLive(); }; div.appendChild(pyr);
         return wrap;
       }
       function kvApprovals(){
@@ -354,6 +361,12 @@
           el.onchange = ()=> updateFromForm(form, obj);
         });
       }
+      function openConnectors(agent){
+        openModal('#connModal'); const ghRepo=qs('#connGithubRepo'), ghTok=qs('#connGithubToken'), slack=qs('#connSlack'), status=qs('#connStatus'); const cfg = (agent.connectors||{}); ghRepo.value = cfg.github?.repo||''; ghTok.value = cfg.github?.token||''; slack.value = cfg.slack?.webhook||'';
+        qs('#connTest').onclick = async ()=>{ status.textContent='Testing...'; try{ const j = await (await fetch('/api/connectors/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type:'multi', config:{ github:{ repo: ghRepo.value, token: ghTok.value }, slack:{ webhook: slack.value } } })})).json(); status.textContent = j.ok? 'OK' : 'Failed'; }catch{ status.textContent='Failed'; } };
+        qs('#connSave').onclick = async ()=>{ agent.connectors = { github:{ repo: ghRepo.value, token: ghTok.value }, slack:{ webhook: slack.value } }; await fetch('/api/agents/item',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent }) }); closeModal('#connModal'); await loadAll(); };
+      }
+
       function updateFromForm(form, obj){
         qsa('[data-field]', form).forEach(el=>{
           const f = el.dataset.field;
@@ -384,7 +397,7 @@
       async function validateAndMaybeSave(silent){
         const ok = await validateLive(); if(!ok && !silent){ alert('Please fix validation errors'); return; }
         if(silent) return;
-        const res = await fetch('/api/agents/save',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents:S.agents, skills:S.skills }) });
+        const res = await fetch('/api/agents/save',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents:S.agents, skills:S.skills, reason: (S.saveReason||null) }) }); S.saveReason=null;
         const j = await res.json(); if(!j.ok) return alert('Save failed');
         await fetch('/api/agents/reload',{ method:'POST' });
         showModal(false); await loadAll();
@@ -409,20 +422,17 @@
 
       async function testAgent(a){ const prompt = window.prompt('Test prompt','Hello'); if(prompt===null) return; await fetch('/api/agents/test',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agent:a.name, prompt }) }); alert('Test triggered (see timeline/log)'); }
       async function expandAgent(card, a){
-        // Open details drawer and populate status, logs, and a recent timeline (basic)
         openModal('#detailsModal');
         qs('#detailsTitle').textContent = `Agent: ${a.name}`;
-        try {
-          const st = (await (await fetch('/api/agents/status?window=3600')).json()).status || {};
-          const s = st[a.name] || {};
-          qs('#detStatus').textContent = JSON.stringify(s, null, 2);
-        } catch { qs('#detStatus').textContent = 'status unavailable'; }
-        try{
-          const j = await (await fetch(`/api/agents/logs?agent=${encodeURIComponent(a.name)}&limit=100`)).json();
-          const lines = (j.events||[]).map(ev=>`${new Date((ev.ts||0)*1000).toLocaleTimeString()} ${ev.kind||''} ${ev.status||''}`);
-          qs('#detLogs').textContent = lines.join('\n')||'No logs';
-          qs('#detTimeline').textContent = lines.slice(-50).join('\n');
-        }catch{ qs('#detLogs').textContent='No logs'; qs('#detTimeline').textContent=''; }
+        // status
+        try { const st = (await (await fetch('/api/agents/status?window=3600')).json()).status || {}; const s = st[a.name] || {}; qs('#detStatus').textContent = JSON.stringify(s, null, 2); } catch { qs('#detStatus').textContent = 'status unavailable'; }
+        // logs/timeline
+        try{ const j = await (await fetch(`/api/agents/logs?agent=${encodeURIComponent(a.name)}&limit=100`)).json(); const lines = (j.events||[]).map(ev=>`${new Date((ev.ts||0)*1000).toLocaleTimeString()} ${ev.kind||''} ${ev.status||''}`); qs('#detLogs').textContent = lines.join('\n')||'No logs'; qs('#detTimeline').textContent = lines.slice(-50).join('\n'); }catch{ qs('#detLogs').textContent='No logs'; qs('#detTimeline').textContent=''; }
+        // KPI
+        try{ const k = await (await fetch(`/api/agents/kpi?agent=${encodeURIComponent(a.name)}&window=3600`)).json(); const m = k.metrics||{}; const stats = `calls=${m.calls||0} errors=${m.errors||0} success=${((m.successRate||0)*100).toFixed(0)}% latency=${Math.round(m.avgLatencyMs||0)}ms medianWait=${(m.medianTimeToApprovalSec||0).toFixed(1)}s`; qs('#detKpiStats').textContent=stats; const series = Array.isArray(m.sparklinePerMin)? m.sparklinePerMin: []; const canvas = qs('#detKpiSpark'); if(canvas){ const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); if(series.length){ const max = Math.max(1, ...series); ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--info'); ctx.beginPath(); series.forEach((v,i)=>{ const x = i*(canvas.width/Math.max(1,(series.length-1))); const y = canvas.height - (v/max)*canvas.height; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke(); } }
+          qs('#detExportKpi').onclick = ()=>{ const blob = new Blob([JSON.stringify(k,null,2)],{type:'application/json'}); const ael=document.createElement('a'); ael.href=URL.createObjectURL(blob); ael.download=`kpi_${a.name}.json`; ael.click(); };
+          qs('#detJumpRuns').onclick = ()=>{ window.location.href = `/runs.html?agent=${encodeURIComponent(a.name)}`; };
+        }catch{}
       }
 
       // events
@@ -465,7 +475,8 @@
           await validateSel();
           qs('#applyImport').onclick = async ()=>{ const sel = getSelection(); // dry-run
             const dry = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:true }) })).json(); if(!dry.ok){ status.textContent='Errors: '+JSON.stringify(dry.errors); return; }
-            const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:false }) })).json(); if(!res.ok){ status.textContent='Apply failed'; return; }
+            const prog = document.getElementById('importProgress'); let v=0; prog.value=0; const t = setInterval(()=>{ v=Math.min(100, v+10); prog.value=v; }, 200);
+            const res = await (await fetch('/api/agents/import',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ agents: sel.agents, skills: sel.skills, partial:true, dryRun:false }) })).json(); clearInterval(t); prog.value=100; if(!res.ok){ status.textContent='Apply failed'; return; }
             closeModal('#importModal'); await loadAll();
           };
         } catch{ status.textContent='Invalid file'; } };
